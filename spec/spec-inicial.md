@@ -212,11 +212,13 @@ apelidos em PT-BR que a spec sempre teve (`/ajuda`, `/lista`, `/pendentes`, `/pr
 
 ### 5.2b Grupos de turma (M16, ADR-0019)
 
-Em grupo ativo (5.6, ADR-0018) o bot **só lê duas coisas** (M37, ADR-0035, que muda a regra do
-ADR-0019): **mensagens que o marcam** (`@bot ...`, conversa com ele, sem comando) e **comandos** com
+Em grupo ativo (5.6, ADR-0018) o bot **só lê três coisas** (M37/M38, ADR-0035/ADR-0036, que mudam a regra do
+ADR-0019): **mensagens que o marcam** (`@bot ...`, conversa com ele, sem comando), **respostas (citações) a uma mensagem do bot** (M38, valem como a marcação) e **comandos** com
 o prefixo (`GROUP_PREFIX`, padrão `!`) **ou `/`**, com uma letra ou número logo depois. O resto é
 conversa entre pessoas e não é lido, gravado nem marcado como lido (o filtro vem antes da
-deduplicação e do `sendSeen`). Mídia é ignorada. Marcar outra pessoa não chama o bot.
+deduplicação e do `sendSeen`). Mídia é ignorada. Marcar ou citar outra pessoa não chama o bot.
+
+- **Citação (M38, ADR-0036):** a mensagem cujo autor citado (`replyTo.participant` ou `_data.Message.<tipo>.contextInfo.participant` com `stanzaID`/`quotedMessage`) é o bot (mesmo reconhecimento da marcação: `me`, `BOT_NUMBER`, LID resolvido) é conversa com ele, sem `@bot` nem comando; com `!`/`/` vale como o comando.
 
 - **Marcação (M37):** o webhook reconhece o bot pelos ids marcados na mensagem — no GOWS o campo
   `mentionedIds` vem vazio e a marcação está em `_data.Message.<tipo>.contextInfo.mentionedJID`, com o
@@ -828,6 +830,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M35 | Revisão diária do grupo sem marcar ninguém (seções 5.2b/5.7/7.1, ADR-0033, substitui o ADR-0020): `!daily`, `Profile.diaria_*`, `domain/agenda_grupo.py`, `!skip`/`!skipall` (e `/skip`, `/skip-all`, `/1`-`/3` com barra), fechamento após 3h parado, pausa após 3 revisões sem resposta | `make check` e `make test-emulador` passam; diária às 19h em dia útil (sexta à noite agenda segunda; `weekends on` agenda sábado); qualquer aluno responde e a 1ª resposta aceitável avança, a errada deixa a palavra aberta; `skip` não mexe na nota; `skipall` resume; 3h parado fecha; 3 revisões sem mensagem pausam e uma mensagem volta; só admin do bot muda `!daily`; `/skip` lido no grupo e `/list` não |
 | M36 | Desafio semanal do grupo (seção 5.2b/6/7.1, ADR-0034): `!weekly`, `Profile.semanal_*`, estado `WEEKLY_QUIZ`, `Tutor.weekly_questions`/`weekly_answer`, marcação em rodízio, menu `/1` explicar (PT→EN em turma iniciante, só EN de B1-B2), `/2` ouvir, `/3` pular | `make check` e `make test-emulador` passam; sexta 13h dispara (outro dia não; `off` não); uma pergunta por aluno, mensagem começa pela menção; só o marcado avança, outro recebe feedback; `1` PT+EN em A1-A2/A2-B1 e só EN em B2; `2` manda voz e sem áudio avisa; `3`/`skip` pulam, `skipall` encerra; 3h parado fecha; só admin do bot muda `!weekly`; perguntas com o Gemini real conferidas em A1-A2, B1-B2 e C2 |
 | M37 | Grupo responde a quem marca o bot e comandos valem com `!` ou `/` (seções 5.2b/8.1, ADR-0035, muda a regra do ADR-0019): filtro do webhook por marcação (`mentionedIds` número/LID ou `@numero`), `Router.processar(marcado=)`, `grupo.tratar(marcado=)`, menus e cartões do grupo com "tag me", `!add` escondido da ajuda, `weekly_answer` julga coerência com a pergunta sem cobrar o vocabulário | `make check` passa; `@bot stall` num grupo ativo adiciona a palavra; `@bot 4`/`@bot a frase` respondem menu, revisão e desafio; marcar outra pessoa ou conversar não chama o bot (nada gravado, sem `sendSeen`); marcação por LID resolvida; `@bot !help` é comando; `/help` e `/list` valem; `@bot` sozinho mostra a ajuda; a avaliação do desafio não exige as palavras (prompt) |
+| M38 | Grupo responde a quem cita uma mensagem do bot (seções 5.2b/8.1, ADR-0036): `MessagePayload.reply_to`/`ids_do_autor_citado`, `_responde_ao_bot` no webhook | `make check` passa; citar o bot (replyTo/contextInfo, número/LID) responde sem marcar; citar outra pessoa não; citar o bot com `!cmd` vale como o comando; mídia citando o bot segue ignorada |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 

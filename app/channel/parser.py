@@ -37,6 +37,8 @@ class MessagePayload(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict, alias="_data")
     mentioned_ids: list[str] = Field(default_factory=list, alias="mentionedIds")
     notify_name: str | None = Field(default=None, alias="notifyName")
+    # M38 (ADR-0036): a mensagem citada (`replyTo`, doc do WAHA).
+    reply_to: dict[str, Any] | None = Field(default=None, alias="replyTo")
 
     def nome_do_remetente(self) -> str | None:
         """O nome que o WhatsApp informa (o "push name"), nunca o telefone. `None` se o payload
@@ -65,6 +67,26 @@ class MessagePayload(BaseModel):
                     if isinstance(marcados, list):
                         ids += [m for m in marcados if isinstance(m, str)]
         return list(dict.fromkeys(ids))
+
+    def ids_do_autor_citado(self) -> list[str]:
+        """Quem escreveu a mensagem que esta responde (citação). O WAHA expõe `replyTo.participant`;
+        o GOWS também traz `_data.Message.<tipo>.contextInfo.participant` (só vale com citação).
+        Vazio se a mensagem não cita nada (M38, ADR-0036)."""
+        ids: list[str] = []
+        if isinstance(self.reply_to, dict) and isinstance(self.reply_to.get("participant"), str):
+            ids.append(self.reply_to["participant"])
+        mensagem = self.data.get("Message")
+        if isinstance(mensagem, dict):
+            for conteudo in mensagem.values():
+                contexto = conteudo.get("contextInfo") if isinstance(conteudo, dict) else None
+                if not isinstance(contexto, dict):
+                    continue
+                autor = contexto.get("participant")
+                if isinstance(autor, str) and (
+                    contexto.get("stanzaID") or contexto.get("quotedMessage")
+                ):
+                    ids.append(autor)
+        return [i for i in dict.fromkeys(ids) if i]
 
     @field_validator("body", mode="before")
     @classmethod

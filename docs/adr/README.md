@@ -45,6 +45,7 @@ operacional: numeração, status e o índice.
 | [0033](0033-revisao-diaria-no-grupo-sem-marcacao.md) | Revisão diária no grupo, sem marcar ninguém | Aceito | 2026-10-01 |
 | [0034](0034-desafio-semanal-com-perguntas-da-ia-e-marcacao.md) | Desafio semanal do grupo, com perguntas da IA e marcação em rodízio | Aceito | 2026-10-01 |
 | [0035](0035-grupo-responde-a-marcacao-e-comandos-seguem.md) | No grupo o bot responde a quem o marca; comandos seguem com `!` ou `/` | Aceito | 2026-10-02 |
+| [0036](0036-grupo-responde-a-citacao-de-mensagem-do-bot.md) | Grupo responde a quem cita uma mensagem do bot | Aceito | 2026-10-06 |
 
 ## Quando escrever um
 

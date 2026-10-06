@@ -14,7 +14,7 @@ import json
 import logging
 import os
 import re
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from functools import lru_cache
@@ -473,8 +473,8 @@ async def _tratar_mensagem_de_grupo(
     router: Router,
     tarefas: BackgroundTasks,
 ) -> None:
-    """Em grupo o bot só lê duas coisas (ADR-0019, ADR-0035): comandos com `!` ou `/` e mensagens
-    que o marcam. O filtro vem antes de tudo (deduplicação, `sendSeen`): o resto é conversa entre
+    """Em grupo o bot só lê três coisas (ADR-0019, ADR-0035, ADR-0036): comandos com `!` ou `/`,
+    mensagens que o marcam e respostas (citações) às mensagens dele. O filtro vem antes de tudo (deduplicação, `sendSeen`): o resto é conversa entre
     pessoas, que ele não lê nem grava. Grupo não ativado só reage a `!activate` de um admin (M15)."""
     grupo_id = payload.from_
     corpo = payload.body
@@ -492,7 +492,9 @@ async def _tratar_mensagem_de_grupo(
             return
         sem_marca = await _sem_marcacao_do_bot(payload, settings, channel, banco)
         if sem_marca is None:
-            return  # conversa entre pessoas: o bot não lê
+            if not await _responde_ao_bot(payload, settings, channel, banco):
+                return  # conversa entre pessoas: o bot não lê
+            sem_marca = corpo  # resposta a uma mensagem do bot: é conversa com ele (ADR-0036)
         corpo = sem_marca
         marcado = grupo.sem_prefixo(corpo, settings.group_prefix) is None
     comando = admin.eh_comando_de_ativacao(corpo, settings.group_prefix)
@@ -529,6 +531,38 @@ async def _tratar_mensagem_de_grupo(
     tarefas.add_task(_responder_no_grupo, router, channel, grupo_id, corpo, autor, marcado)
 
 
+def _reconhecedor_do_bot(settings: Settings, do_canal: set[str]) -> Callable[[str], bool]:
+    """`True` para os dígitos que são do bot: o `me` da sessão (número e LID) ou o `BOT_NUMBER`
+    (nono dígito à parte)."""
+    do_bot = do_canal | {re.sub(r"\D", "", settings.bot_number)}
+
+    def eh_o_bot(digitos: str) -> bool:
+        return digitos in do_bot or numero_e_permitido(digitos, settings.bot_number)
+
+    return eh_o_bot
+
+
+async def _responde_ao_bot(
+    payload: MessagePayload, settings: Settings, channel: ChannelComLid, banco: Banco
+) -> bool:
+    """A mensagem cita (responde a) uma mensagem escrita pelo bot (M38, ADR-0036). O autor citado
+    vem como número ou LID: reconhece-se como a marcação, pelo `me` da sessão ou, sem ele, pelo
+    número que o LID resolve."""
+    citados = payload.ids_do_autor_citado()
+    if not citados:
+        return False
+    do_canal = await channel.bot_ids()
+    eh_o_bot = _reconhecedor_do_bot(settings, do_canal)
+    for citado in citados:
+        if eh_o_bot(digitos_do_chat_id(citado)):
+            return True
+        if not do_canal:
+            numero = await _numero_do_remetente(citado, channel, banco)
+            if numero is not None and eh_o_bot(numero):
+                return True
+    return False
+
+
 async def _sem_marcacao_do_bot(
     payload: MessagePayload, settings: Settings, channel: ChannelComLid, banco: Banco
 ) -> str | None:
@@ -537,10 +571,7 @@ async def _sem_marcacao_do_bot(
     (`contextInfo.mentionedJID`, que no GOWS vem como o LID dele) contra o `me` da sessão e o
     `BOT_NUMBER`; como plano B, por `@numero` ou `@bot` escritos no texto (ADR-0035)."""
     do_canal = await channel.bot_ids()
-    do_bot = do_canal | {re.sub(r"\D", "", settings.bot_number)}
-
-    def eh_o_bot(digitos: str) -> bool:
-        return digitos in do_bot or numero_e_permitido(digitos, settings.bot_number)
+    eh_o_bot = _reconhecedor_do_bot(settings, do_canal)
 
     a_tirar: set[str] = set()
     for mencionado in payload.ids_mencionados():

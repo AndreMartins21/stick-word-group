@@ -1,7 +1,7 @@
-"""O grupo (M16, ADR-0019; marcação no M37, ADR-0035): o bot só reage a duas coisas, e o resto é
-conversa entre pessoas, que ele não lê nem grava:
+"""O grupo (M16, ADR-0019; marcação no M37, ADR-0035; citação no M38, ADR-0036): o bot só reage a
+duas coisas, e o resto é conversa entre pessoas, que ele não lê nem grava:
 
-- **Marcação** (`@bot texto`): é a conversa com o bot. O texto vai para a mesma máquina de estados do
+- **Marcação** (`@bot texto`, ou responder/citar uma mensagem dele): é a conversa com o bot. O texto vai para a mesma máquina de estados do
   privado (`conversar`): dentro de uma atividade é a resposta (`@bot 2`, `@bot a frase`); fora dela
   é uma palavra nova ou um pedido, como no privado. Sem comando.
 - **Comandos** com `!` ou `/` (um conjunto FECHADO): `add`, `delete`, `list`, `practice`, `review`,
