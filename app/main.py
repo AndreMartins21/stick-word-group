@@ -28,7 +28,7 @@ from pydantic import SecretStr, ValidationError
 from starlette.concurrency import run_in_threadpool
 
 from app import messages
-from app.channel.base import ChannelComLid
+from app.channel.base import ChannelComLid, MidiaGrandeDemais
 from app.channel.parser import (
     GroupJoinEvent,
     MessageEvent,
@@ -578,7 +578,14 @@ async def _tratar_mensagem_de_grupo(
     )
     if audio:
         tarefas.add_task(
-            _responder_ao_audio_no_grupo, router, channel, transcritor, payload, grupo_id, autor
+            _responder_ao_audio_no_grupo,
+            router,
+            channel,
+            transcritor,
+            payload,
+            grupo_id,
+            autor,
+            settings.max_segundos_audio,
         )
         return
     tarefas.add_task(_responder_no_grupo, router, channel, grupo_id, corpo, autor, marcado)
@@ -678,11 +685,12 @@ async def _responder_ao_audio_no_grupo(
     payload: MessagePayload,
     grupo_id: str,
     autor: Autor,
+    max_segundos: int,
 ) -> None:
     """Roda depois do 200: baixa o áudio, transcreve, mostra o que ouviu como primeira mensagem e
     segue como uma mensagem marcada comum (M38, ADR-0036). O texto transcrito não vai ao log."""
     try:
-        texto = await _transcrever(channel, transcritor, payload, grupo_id)
+        texto = await _transcrever(channel, transcritor, payload, grupo_id, max_segundos)
     except Exception:
         logger.exception("falha ao transcrever o áudio do grupo")
         with contextlib.suppress(Exception):
@@ -699,6 +707,7 @@ async def _transcrever(
     transcritor: Transcritor | None,
     payload: MessagePayload,
     grupo_id: str,
+    max_segundos: int,
 ) -> str | None:
     """O texto falado, ou `None` depois de avisar o grupo (sem serviço, áudio longo, sem fala)."""
     url = payload.url_da_midia()
@@ -706,9 +715,21 @@ async def _transcrever(
         logger.warning("áudio sem transcritor ou sem url de mídia: ignorado")
         await channel.send_text(grupo_id, messages.ERRO_TRANSCRICAO)
         return None
-    conteudo = await channel.download_media(url)
-    if len(conteudo) > MAX_BYTES_DO_AUDIO:
-        await channel.send_text(grupo_id, messages.AUDIO_GRANDE_DEMAIS)
+    # M41 (ADR-0039): duração e tamanho que o WhatsApp declara no payload recusam o áudio ANTES de
+    # baixá-lo; o download ainda tem teto de bytes, para o caso de o payload não trazer os campos.
+    segundos = payload.segundos_do_audio()
+    declarado = payload.bytes_do_audio()
+    if (segundos is not None and segundos > max_segundos) or (
+        declarado is not None and declarado > MAX_BYTES_DO_AUDIO
+    ):
+        registrar_evento(logger, "audio_recusado", motivo="duracao_ou_tamanho_declarado")
+        await channel.send_text(grupo_id, messages.audio_grande_demais(max_segundos))
+        return None
+    try:
+        conteudo = await channel.download_media(url, max_bytes=MAX_BYTES_DO_AUDIO)
+    except MidiaGrandeDemais:
+        registrar_evento(logger, "audio_recusado", motivo="tamanho_baixado")
+        await channel.send_text(grupo_id, messages.audio_grande_demais(max_segundos))
         return None
     mimetype = payload.mimetype_da_midia() or "audio/ogg"
     texto = await run_in_threadpool(transcritor.transcrever, conteudo, mimetype)

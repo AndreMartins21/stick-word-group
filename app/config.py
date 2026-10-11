@@ -20,7 +20,13 @@ NivelUsuario = Literal["A1-A2", "A2-B1", "B1-B2", "B2-C1", "C1-C2", "C2"]
 ProvedorLLM = Literal["vertex_gemini", "anthropic"]
 AmbienteApp = Literal["local", "prod"]
 CONTATO_PADRAO = "smartins.bot@gmail.com"
-_NUMERICOS = {"max_groups", "limite_por_sessao_grupo", "timeout_marcacao_horas", "max_caracteres"}
+_NUMERICOS = {
+    "max_groups",
+    "limite_por_sessao_grupo",
+    "timeout_marcacao_horas",
+    "max_caracteres",
+    "max_segundos_audio",
+}
 
 
 class Settings(BaseSettings):
@@ -51,6 +57,9 @@ class Settings(BaseSettings):
     # Teto de caracteres de uma mensagem que chega à IA (M40, ADR-0038): acima disso o bot recusa
     # sem chamar o modelo. Nenhuma palavra, frase ou resposta de prática passa de algumas centenas.
     max_caracteres: int = Field(default=500, ge=20)
+    # Duração máxima de uma nota de voz que o bot ouve (M41, ADR-0039), conferida no payload antes de
+    # baixar. 60 s cabem em ~500 caracteres falados, o mesmo teto do texto.
+    max_segundos_audio: int = Field(default=60, ge=5)
     bot_number: str
     user_level: NivelUsuario = "B1-B2"
     # Fuso do aluno, para distribuir os lembretes de revisão espaçada (seção 5.7, M10).

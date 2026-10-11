@@ -6,6 +6,10 @@ from collections.abc import Sequence
 from typing import Protocol
 
 
+class MidiaGrandeDemais(Exception):
+    """A mídia passa do `max_bytes` pedido em `Channel.download_media` (M41, ADR-0039)."""
+
+
 class Channel(Protocol):
     """Enviar texto, arquivo e voz, marcar como lido, digitando. Implementações: WahaChannel, ConsoleChannel,
     FakeChannel — trocável no futuro por Cloud API ou Telegram sem tocar na lógica de negócio."""
@@ -60,7 +64,9 @@ class ChannelComLid(Channel, Protocol):
         dele num grupo. Nunca levanta: se o canal falhar, vazio (M37)."""
         ...
 
-    async def download_media(self, url: str) -> bytes:
+    async def download_media(self, url: str, max_bytes: int | None = None) -> bytes:
         """Baixa a mídia que o webhook anunciou em `media.url` (M38). Levanta se falhar: quem chama
-        avisa o grupo. O WAHA exige a API key e a URL pode apontar para o host de fora do compose."""
+        avisa o grupo. O WAHA exige a API key e a URL pode apontar para o host de fora do compose.
+        Com `max_bytes` (M41, ADR-0039) o download é interrompido ao passar do limite e levanta
+        `MidiaGrandeDemais`, sem nunca guardar a mídia inteira na memória."""
         ...

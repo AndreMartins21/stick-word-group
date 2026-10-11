@@ -16,6 +16,8 @@ from urllib.parse import urlsplit
 import httpx
 from pydantic import SecretStr
 
+from app.channel.base import MidiaGrandeDemais
+
 logger = logging.getLogger(__name__)
 
 
@@ -174,16 +176,47 @@ class WahaChannel:
         self._ids_do_bot = {i for i in ids if i}
         return self._ids_do_bot
 
-    async def download_media(self, url: str) -> bytes:
+    async def download_media(self, url: str, max_bytes: int | None = None) -> bytes:
         """`GET` no caminho de `media.url` (`/api/files/...`) pelo host e pela API key do bot: o
-        webhook anuncia `http://localhost:3000/...`, que de dentro do compose não é o WAHA. Sem
-        retentativa de rede lenta além da padrão; o tamanho é do chamador conferir."""
+        webhook anuncia `http://localhost:3000/...`, que de dentro do compose não é o WAHA. Em
+        *streaming*: com `max_bytes` (M41, ADR-0039) o corpo é lido aos pedaços e o download é
+        abortado ao passar do limite (`MidiaGrandeDemais`), sem encher a memória do container."""
         partes = urlsplit(url)
         alvo = partes.path + (f"?{partes.query}" if partes.query else "")
-        resposta = await self._com_retentativas(
-            "GET", alvo, json=None, limite_segundos=self._timeout_arquivo
-        )
-        return resposta.content
+        ultimo_erro: Exception | None = None
+        for tentativa in range(self._max_tentativas):
+            try:
+                async with self._cliente.stream(
+                    "GET", alvo, timeout=self._timeout_arquivo
+                ) as resposta:
+                    if resposta.status_code >= 500:
+                        raise httpx.HTTPStatusError(
+                            f"WAHA respondeu {resposta.status_code}",
+                            request=resposta.request,
+                            response=resposta,
+                        )
+                    resposta.raise_for_status()
+                    declarado = resposta.headers.get("content-length", "")
+                    if max_bytes is not None and declarado.isdigit() and int(declarado) > max_bytes:
+                        raise MidiaGrandeDemais(alvo)
+                    pedacos: list[bytes] = []
+                    total = 0
+                    async for pedaco in resposta.aiter_bytes():
+                        total += len(pedaco)
+                        if max_bytes is not None and total > max_bytes:
+                            raise MidiaGrandeDemais(alvo)
+                        pedacos.append(pedaco)
+                    return b"".join(pedacos)
+            except (httpx.TransportError, httpx.HTTPStatusError) as erro:
+                if isinstance(erro, httpx.HTTPStatusError) and erro.response.status_code < 500:
+                    raise
+                ultimo_erro = erro
+                logger.warning("falha ao baixar mídia (tentativa %d)", tentativa + 1)
+            if tentativa < self._max_tentativas - 1:
+                await asyncio.sleep(self._backoff_base * (2**tentativa))
+        if ultimo_erro is None:
+            raise RuntimeError("download_media terminou sem sucesso nem erro registrado")
+        raise ultimo_erro
 
     async def _get(self, path: str) -> httpx.Response:
         return await self._com_retentativas("GET", path, json=None)

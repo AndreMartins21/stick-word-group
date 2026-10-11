@@ -97,6 +97,31 @@ class MessagePayload(BaseModel):
         url = self.media.get("url") if isinstance(self.media, dict) else None
         return url if isinstance(url, str) and url else None
 
+    def _audio_message(self) -> dict[str, Any]:
+        mensagem = self.data.get("Message")
+        audio = mensagem.get("audioMessage") if isinstance(mensagem, dict) else None
+        return audio if isinstance(audio, dict) else {}
+
+    @staticmethod
+    def _inteiro(valor: object) -> int | None:
+        """Os campos numéricos do protobuf vêm como número ou, os de 64 bits, como texto."""
+        if isinstance(valor, bool):
+            return None
+        if isinstance(valor, int):
+            return valor
+        if isinstance(valor, str) and valor.isdigit():
+            return int(valor)
+        return None
+
+    def segundos_do_audio(self) -> int | None:
+        """Duração que o WhatsApp informa no `audioMessage.seconds` (M41, ADR-0039), para recusar
+        o áudio longo ANTES de baixá-lo. `None` se o payload não trouxer."""
+        return self._inteiro(self._audio_message().get("seconds"))
+
+    def bytes_do_audio(self) -> int | None:
+        """Tamanho declarado (`audioMessage.fileLength`); `None` se o payload não trouxer."""
+        return self._inteiro(self._audio_message().get("fileLength"))
+
     def eh_audio(self) -> bool:
         """Nota de voz ou áudio (M38): pelo mimetype da mídia ou, sem ele, pelo `audioMessage` do GOWS."""
         if not self.has_media:

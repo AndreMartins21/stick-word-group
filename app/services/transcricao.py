@@ -15,9 +15,9 @@ from app.services.llm import LLMError, criar_cliente_vertex
 
 logger = logging.getLogger(__name__)
 
-# Nota de voz de WhatsApp tem ~16 kHz em Opus: 3 MB passam de 10 minutos. Mais que isso é custo sem
-# ganho para uma frase de prática.
-MAX_BYTES_DO_AUDIO = 3 * 1024 * 1024
+# Nota de voz de WhatsApp é Opus a ~16 kbps: 1 MB são ~8 minutos, bem acima do teto de duração
+# (`MAX_SEGUNDOS_AUDIO`, M41, ADR-0039). Mais que isso é custo e memória sem ganho para uma frase.
+MAX_BYTES_DO_AUDIO = 1024 * 1024
 
 _PROMPT = (
     "Transcribe this voice message exactly as spoken, in the language spoken (usually English from "

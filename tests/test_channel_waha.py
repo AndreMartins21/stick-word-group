@@ -9,6 +9,7 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
+from app.channel.base import MidiaGrandeDemais
 from app.channel.waha import WahaChannel
 
 
@@ -377,3 +378,52 @@ async def test_download_media_usa_o_host_e_a_api_key_do_bot_nao_o_da_url() -> No
     (requisicao,) = requisicoes
     assert str(requisicao.url) == "http://waha:3000/api/files/voz.oga?x=1"
     assert requisicao.headers["X-Api-Key"] == "segredo-do-teste"
+
+
+class _CorpoEmPedacos(httpx.AsyncByteStream):
+    def __init__(self, pedacos: list[bytes]) -> None:
+        self.pedacos = pedacos
+        self.lidos = 0
+
+    async def __aiter__(self):
+        for pedaco in self.pedacos:
+            self.lidos += 1
+            yield pedaco
+
+
+async def test_download_media_aborta_ao_passar_do_max_bytes_sem_ler_o_resto() -> None:
+    corpo = _CorpoEmPedacos([b"x" * 400] * 100)
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, stream=corpo)
+
+    canal = _canal(httpx.MockTransport(handler))
+    with pytest.raises(MidiaGrandeDemais):
+        await canal.download_media("http://localhost:3000/api/files/a.oga", max_bytes=1000)
+    await canal.aclose()
+
+    assert corpo.lidos == 3  # parou no terceiro pedaço (1.200 bytes), sem ler os 97 restantes
+
+
+async def test_download_media_recusa_pelo_content_length_sem_ler_o_corpo() -> None:
+    corpo = _CorpoEmPedacos([b"x"])
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, headers={"content-length": "5000"}, stream=corpo)
+
+    canal = _canal(httpx.MockTransport(handler))
+    with pytest.raises(MidiaGrandeDemais):
+        await canal.download_media("http://localhost:3000/api/files/a.oga", max_bytes=1000)
+    await canal.aclose()
+
+    assert corpo.lidos == 0
+
+
+async def test_download_media_tenta_de_novo_em_5xx() -> None:
+    respostas = iter([httpx.Response(503), httpx.Response(200, content=b"ogg")])
+
+    canal = _canal(httpx.MockTransport(lambda _: next(respostas)))
+    conteudo = await canal.download_media("http://localhost:3000/api/files/a.oga", max_bytes=10)
+    await canal.aclose()
+
+    assert conteudo == b"ogg"

@@ -106,7 +106,7 @@ def test_audio_longo_demais_avisa_e_nao_transcreve(ambiente: Ambiente) -> None:
     ambiente.cliente.post("/waha/webhook", json=_audio(f"{BOT}@c.us"))
 
     assert ambiente.transcritor.chamadas == []
-    assert ambiente.canal.textos_enviados == [(GRUPO_FIXO, messages.AUDIO_GRANDE_DEMAIS)]
+    assert ambiente.canal.textos_enviados == [(GRUPO_FIXO, messages.audio_grande_demais(60))]
 
 
 def test_audio_sem_fala_avisa_e_nao_chama_a_ia(ambiente: Ambiente) -> None:
@@ -141,3 +141,61 @@ def test_audio_sem_transcritor_configurado_avisa(ambiente: Ambiente) -> None:
     ambiente.cliente.post("/waha/webhook", json=_audio(f"{BOT}@c.us"))
 
     assert ambiente.canal.textos_enviados == [(GRUPO_FIXO, messages.ERRO_TRANSCRICAO)]
+
+
+# --- M41 (ADR-0039): limite de duração e de tamanho, antes e durante o download --------------
+
+
+def _audio_com(autor: str, **audio_message: Any) -> dict[str, Any]:
+    corpo = _audio(autor)
+    corpo["payload"]["_data"] = {"Message": {"audioMessage": audio_message}}
+    return corpo
+
+
+def test_parser_le_duracao_e_tamanho_do_audio_message() -> None:
+    base = {"id": "1", "from": GRUPO_FIXO, "hasMedia": True}
+
+    com = MessagePayload.model_validate(
+        {**base, "_data": {"Message": {"audioMessage": {"seconds": 75, "fileLength": "123456"}}}}
+    )
+    sem = MessagePayload.model_validate({**base})
+
+    assert (com.segundos_do_audio(), com.bytes_do_audio()) == (75, 123456)
+    assert (sem.segundos_do_audio(), sem.bytes_do_audio()) == (None, None)
+
+
+def test_audio_acima_da_duracao_e_recusado_sem_baixar(ambiente: Ambiente) -> None:
+    ambiente.canal.midias[URL] = b"ogg"
+
+    ambiente.cliente.post("/waha/webhook", json=_audio_com(f"{BOT}@c.us", seconds=3600))
+
+    assert ambiente.canal.downloads == []
+    assert ambiente.transcritor.chamadas == []
+    assert ambiente.canal.textos_enviados == [(GRUPO_FIXO, messages.audio_grande_demais(60))]
+
+
+def test_audio_no_limite_de_duracao_e_transcrito(ambiente: Ambiente) -> None:
+    ambiente.canal.midias[URL] = b"ogg"
+
+    ambiente.cliente.post("/waha/webhook", json=_audio_com(f"{BOT}@c.us", seconds=60))
+
+    assert len(ambiente.transcritor.chamadas) == 1
+
+
+def test_audio_com_tamanho_declarado_grande_e_recusado_sem_baixar(ambiente: Ambiente) -> None:
+    ambiente.canal.midias[URL] = b"ogg"
+
+    ambiente.cliente.post(
+        "/waha/webhook",
+        json=_audio_com(f"{BOT}@c.us", seconds=10, fileLength=str(MAX_BYTES_DO_AUDIO + 1)),
+    )
+
+    assert ambiente.canal.downloads == []
+    assert ambiente.canal.textos_enviados == [(GRUPO_FIXO, messages.audio_grande_demais(60))]
+
+
+def test_o_eco_da_transcricao_e_cortado() -> None:
+    eco = messages.audio_transcrito("a" * 1000)
+
+    assert len(eco) < 320 and eco.endswith("…_")
+    assert messages.audio_transcrito("curto") == "🎙️ _curto_"

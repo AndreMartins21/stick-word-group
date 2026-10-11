@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
+from app.channel.base import MidiaGrandeDemais
+
 
 @dataclass
 class FakeChannel:
@@ -23,6 +25,7 @@ class FakeChannel:
     grupos_deixados: list[str] = field(default_factory=list)
     nomes_de_grupos: dict[str, str] = field(default_factory=dict)
     midias: dict[str, bytes] = field(default_factory=dict)  # url -> conteúdo (M38)
+    downloads: list[str] = field(default_factory=list)  # urls baixadas (M41)
 
     async def send_text(
         self, chat_id: str, text: str, mentions: Sequence[str] | None = None
@@ -71,7 +74,10 @@ class FakeChannel:
     async def bot_ids(self) -> set[str]:
         return set(self.ids_do_bot)
 
-    async def download_media(self, url: str) -> bytes:
+    async def download_media(self, url: str, max_bytes: int | None = None) -> bytes:
+        self.downloads.append(url)
         if url not in self.midias:
             raise RuntimeError(f"mídia inexistente: {url}")
+        if max_bytes is not None and len(self.midias[url]) > max_bytes:
+            raise MidiaGrandeDemais(url)
         return self.midias[url]
