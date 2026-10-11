@@ -65,6 +65,11 @@ from app.services.storage import (
     criar_armazenamento_gcs,
     criar_cache_audio_gcs,
 )
+from app.services.transcricao import (
+    MAX_BYTES_DO_AUDIO,
+    Transcritor,
+    criar_transcritor_vertex,
+)
 from app.services.tts import GoogleTts
 
 logger = logging.getLogger(__name__)
@@ -127,6 +132,20 @@ def _criar_audio(settings: Settings) -> ServicoAudio | None:
     )
 
 
+def _criar_transcritor(settings: Settings) -> Transcritor | None:
+    """Transcrição de áudio (M39): o mesmo Gemini do Vertex, só em produção, com
+    `GEMINI_MODEL_AUDIO` ou, vazio, o `GEMINI_MODEL`. Com `LLM_PROVIDER=anthropic` (sem áudio) ou
+    fora de produção, fica indisponível e o bot avisa."""
+    modelo = settings.gemini_model_audio or settings.gemini_model
+    if settings.app_env != "prod" or settings.llm_provider != "vertex_gemini" or not modelo:
+        return None
+    return criar_transcritor_vertex(
+        projeto=settings.gcp_project_id,
+        localizacao=settings.vertex_location,
+        modelo=modelo,
+    )
+
+
 def _criar_destino_metricas(settings: Settings) -> DestinoDeMetricas | None:
     """M28: sem `METRICS_BUCKET` (ou fora de produção), o snapshot diário simplesmente não roda —
     o `Agendador` confere isto sozinho (`destino_de_metricas=None`)."""
@@ -149,6 +168,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     banco = _criar_banco(settings)
     app.state.channel = canal
     app.state.banco = banco
+    app.state.transcritor = _criar_transcritor(settings)
     router = Router(
         banco=banco,
         tutor=criar_tutor(settings),
@@ -215,6 +235,11 @@ def get_router(request: Request) -> Router:
     return router
 
 
+def get_transcritor(request: Request) -> Transcritor | None:
+    transcritor: Transcritor | None = getattr(request.app.state, "transcritor", None)
+    return transcritor
+
+
 @app.get("/health")
 def health() -> dict[str, bool]:
     return {"ok": True}
@@ -227,6 +252,7 @@ async def waha_webhook(
     channel: Annotated[ChannelComLid, Depends(get_channel)],
     banco: Annotated[Banco, Depends(get_banco)],
     router: Annotated[Router, Depends(get_router)],
+    transcritor: Annotated[Transcritor | None, Depends(get_transcritor)],
     tarefas: BackgroundTasks,
 ) -> dict[str, bool]:
     corpo_bruto = await request.body()
@@ -263,7 +289,9 @@ async def waha_webhook(
 
     if isinstance(evento, MessageEvent):
         try:
-            await _tratar_mensagem(evento.payload, settings, channel, banco, router, tarefas)
+            await _tratar_mensagem(
+                evento.payload, settings, channel, banco, router, transcritor, tarefas
+            )
         except Exception:
             # Antes de saber quem escreveu não há para quem avisar; depois, o aviso vai só ao
             # próprio chat (dentro de `_tratar_mensagem`), nunca a outro aluno.
@@ -289,6 +317,7 @@ async def _tratar_mensagem(
     channel: ChannelComLid,
     banco: Banco,
     router: Router,
+    transcritor: Transcritor | None,
     tarefas: BackgroundTasks,
 ) -> None:
     if payload.from_me:
@@ -296,7 +325,9 @@ async def _tratar_mensagem(
         return
 
     if payload.from_.endswith("@g.us"):
-        await _tratar_mensagem_de_grupo(payload, settings, channel, banco, router, tarefas)
+        await _tratar_mensagem_de_grupo(
+            payload, settings, channel, banco, router, transcritor, tarefas
+        )
         return
 
     if deve_ignorar_chat(payload.from_):
@@ -471,11 +502,14 @@ async def _tratar_mensagem_de_grupo(
     channel: ChannelComLid,
     banco: Banco,
     router: Router,
+    transcritor: Transcritor | None,
     tarefas: BackgroundTasks,
 ) -> None:
     """Em grupo o bot só lê três coisas (ADR-0019, ADR-0035, ADR-0036): comandos com `!` ou `/`,
-    mensagens que o marcam e respostas (citações) às mensagens dele. O filtro vem antes de tudo (deduplicação, `sendSeen`): o resto é conversa entre
-    pessoas, que ele não lê nem grava. Grupo não ativado só reage a `!activate` de um admin (M15)."""
+    mensagens que o marcam e respostas (citações) às mensagens dele; só a resposta a uma mensagem
+    do bot também vale em áudio (M39, ADR-0037). O filtro vem antes de tudo (deduplicação,
+    `sendSeen`): o resto é conversa entre pessoas, que ele não lê nem grava. Grupo não ativado só
+    reage a `!activate` de um admin (M15)."""
     grupo_id = payload.from_
     corpo = payload.body
     acesso = _acesso(settings, channel, banco)
@@ -484,10 +518,17 @@ async def _tratar_mensagem_de_grupo(
         _logar_grupo_uma_vez(grupo_id)
         await _registrar_pendente(banco, grupo_id)
 
-    if payload.has_media:
-        return  # mídia: ignorada em silêncio
+    audio = payload.eh_audio()
+    if payload.has_media and not audio:
+        return  # mídia que não é áudio: ignorada em silêncio
     marcado = False
-    if grupo.sem_prefixo(corpo, settings.group_prefix) is None:
+    if audio:
+        # Áudio não carrega `@bot` nem comando: só a resposta a uma mensagem do bot o chama.
+        if not autorizado or not await _responde_ao_bot(payload, settings, channel, banco):
+            return
+        corpo = ""
+        marcado = True
+    elif grupo.sem_prefixo(corpo, settings.group_prefix) is None:
         if not autorizado:
             return
         sem_marca = await _sem_marcacao_do_bot(payload, settings, channel, banco)
@@ -516,7 +557,13 @@ async def _tratar_mensagem_de_grupo(
         "mensagem_recebida",
         espaco=id_curto(grupo_id),
         tipo_espaco="grupo",
-        comando="marcacao" if marcado else _nome_do_comando(corpo, settings.group_prefix),
+        comando=(
+            "audio"
+            if audio
+            else "marcacao"
+            if marcado
+            else _nome_do_comando(corpo, settings.group_prefix)
+        ),
     )
     await channel.send_seen(grupo_id)
 
@@ -528,6 +575,11 @@ async def _tratar_mensagem_de_grupo(
         nome=payload.nome_do_remetente(),
         mencionados=await _numeros_mencionados(payload, channel, banco),
     )
+    if audio:
+        tarefas.add_task(
+            _responder_ao_audio_no_grupo, router, channel, transcritor, payload, grupo_id, autor
+        )
+        return
     tarefas.add_task(_responder_no_grupo, router, channel, grupo_id, corpo, autor, marcado)
 
 
@@ -616,6 +668,53 @@ async def _responder_no_grupo(
         logger.exception("falha ao processar mensagem de grupo")
         with contextlib.suppress(Exception):
             await channel.send_text(grupo_id, messages.ERRO_INESPERADO)
+
+
+async def _responder_ao_audio_no_grupo(
+    router: Router,
+    channel: ChannelComLid,
+    transcritor: Transcritor | None,
+    payload: MessagePayload,
+    grupo_id: str,
+    autor: Autor,
+) -> None:
+    """Roda depois do 200: baixa o áudio, transcreve, mostra o que ouviu como primeira mensagem e
+    segue como uma mensagem marcada comum (M38, ADR-0036). O texto transcrito não vai ao log."""
+    try:
+        texto = await _transcrever(channel, transcritor, payload, grupo_id)
+    except Exception:
+        logger.exception("falha ao transcrever o áudio do grupo")
+        with contextlib.suppress(Exception):
+            await channel.send_text(grupo_id, messages.ERRO_TRANSCRICAO)
+        return
+    if texto is None:
+        return
+    await channel.send_text(grupo_id, messages.audio_transcrito(texto))
+    await _responder_no_grupo(router, channel, grupo_id, texto, autor, marcado=True)
+
+
+async def _transcrever(
+    channel: ChannelComLid,
+    transcritor: Transcritor | None,
+    payload: MessagePayload,
+    grupo_id: str,
+) -> str | None:
+    """O texto falado, ou `None` depois de avisar o grupo (sem serviço, áudio longo, sem fala)."""
+    url = payload.url_da_midia()
+    if transcritor is None or url is None:
+        logger.warning("áudio sem transcritor ou sem url de mídia: ignorado")
+        await channel.send_text(grupo_id, messages.ERRO_TRANSCRICAO)
+        return None
+    conteudo = await channel.download_media(url)
+    if len(conteudo) > MAX_BYTES_DO_AUDIO:
+        await channel.send_text(grupo_id, messages.AUDIO_GRANDE_DEMAIS)
+        return None
+    mimetype = payload.mimetype_da_midia() or "audio/ogg"
+    texto = await run_in_threadpool(transcritor.transcrever, conteudo, mimetype)
+    if not texto:
+        await channel.send_text(grupo_id, messages.AUDIO_SEM_FALA)
+        return None
+    return texto
 
 
 async def _numero_do_remetente(chat_id: str, channel: ChannelComLid, banco: Banco) -> str | None:

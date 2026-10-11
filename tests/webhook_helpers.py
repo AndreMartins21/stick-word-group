@@ -16,9 +16,10 @@ from app.config import Settings
 from app.flows.base import ConfigGrupo
 from app.flows.conversa import Conversa
 from app.flows.router import Router
-from app.main import app, get_banco, get_channel, get_router, get_settings
+from app.main import app, get_banco, get_channel, get_router, get_settings, get_transcritor
 from app.repo.memory import MemoryBanco
 from app.services.fake_llm import FakeTutor
+from app.services.fake_transcricao import FakeTranscritor
 from tests.helpers import T0, explicacao_stall
 
 DONO = "5531999998888"
@@ -40,6 +41,7 @@ class Ambiente:
     banco: MemoryBanco
     tutor: FakeTutor
     settings: Settings
+    transcritor: FakeTranscritor
 
 
 @contextmanager
@@ -76,8 +78,10 @@ def criar_ambiente() -> Iterator[Ambiente]:
     app.dependency_overrides[get_channel] = lambda: canal
     app.dependency_overrides[get_banco] = lambda: banco
     app.dependency_overrides[get_router] = lambda: router
+    transcritor = FakeTranscritor()
+    app.dependency_overrides[get_transcritor] = lambda: transcritor
     try:
-        yield Ambiente(TestClient(app), canal, banco, tutor, settings)
+        yield Ambiente(TestClient(app), canal, banco, tutor, settings, transcritor)
     finally:
         app.dependency_overrides.clear()
 

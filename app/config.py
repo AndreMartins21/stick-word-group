@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     vertex_location: str = "global"
     gemini_model: str | None = None
     gemini_model_eval: str | None = None
+    # M39 (ADR-0037): modelo da transcrição de áudio; vazio usa o `gemini_model`.
+    gemini_model_audio: str | None = None
     anthropic_api_key: SecretStr | None = None
     anthropic_model: str = "claude-haiku-4-5-20251001"
 
@@ -91,6 +93,7 @@ class Settings(BaseSettings):
         "anthropic_api_key",
         "gemini_model",
         "gemini_model_eval",
+        "gemini_model_audio",
         "owner_number",
         "audio_bucket",
         "metrics_bucket",

@@ -37,8 +37,9 @@ class MessagePayload(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict, alias="_data")
     mentioned_ids: list[str] = Field(default_factory=list, alias="mentionedIds")
     notify_name: str | None = Field(default=None, alias="notifyName")
-    # M38 (ADR-0036): a mensagem citada (`replyTo`, doc do WAHA).
+    # M38 (ADR-0036): a mensagem citada (`replyTo`, doc do WAHA) e a mídia baixada (`media.url`).
     reply_to: dict[str, Any] | None = Field(default=None, alias="replyTo")
+    media: dict[str, Any] | None = None
 
     def nome_do_remetente(self) -> str | None:
         """O nome que o WhatsApp informa (o "push name"), nunca o telefone. `None` se o payload
@@ -87,6 +88,24 @@ class MessagePayload(BaseModel):
                 ):
                     ids.append(autor)
         return [i for i in dict.fromkeys(ids) if i]
+
+    def mimetype_da_midia(self) -> str | None:
+        mimetype = self.media.get("mimetype") if isinstance(self.media, dict) else None
+        return mimetype if isinstance(mimetype, str) and mimetype else None
+
+    def url_da_midia(self) -> str | None:
+        url = self.media.get("url") if isinstance(self.media, dict) else None
+        return url if isinstance(url, str) and url else None
+
+    def eh_audio(self) -> bool:
+        """Nota de voz ou áudio (M38): pelo mimetype da mídia ou, sem ele, pelo `audioMessage` do GOWS."""
+        if not self.has_media:
+            return False
+        mimetype = self.mimetype_da_midia()
+        if mimetype is not None:
+            return mimetype.startswith("audio/")
+        mensagem = self.data.get("Message")
+        return isinstance(mensagem, dict) and "audioMessage" in mensagem
 
     @field_validator("body", mode="before")
     @classmethod

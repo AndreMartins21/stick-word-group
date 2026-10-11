@@ -22,6 +22,7 @@ class FakeChannel:
     participantes_de_grupos: dict[str, list[str]] = field(default_factory=dict)
     grupos_deixados: list[str] = field(default_factory=list)
     nomes_de_grupos: dict[str, str] = field(default_factory=dict)
+    midias: dict[str, bytes] = field(default_factory=dict)  # url -> conteúdo (M38)
 
     async def send_text(
         self, chat_id: str, text: str, mentions: Sequence[str] | None = None
@@ -69,3 +70,8 @@ class FakeChannel:
 
     async def bot_ids(self) -> set[str]:
         return set(self.ids_do_bot)
+
+    async def download_media(self, url: str) -> bytes:
+        if url not in self.midias:
+            raise RuntimeError(f"mídia inexistente: {url}")
+        return self.midias[url]

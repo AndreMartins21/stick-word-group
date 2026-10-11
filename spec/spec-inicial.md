@@ -216,9 +216,10 @@ Em grupo ativo (5.6, ADR-0018) o bot **só lê três coisas** (M37/M38, ADR-0035
 ADR-0019): **mensagens que o marcam** (`@bot ...`, conversa com ele, sem comando), **respostas (citações) a uma mensagem do bot** (M38, valem como a marcação) e **comandos** com
 o prefixo (`GROUP_PREFIX`, padrão `!`) **ou `/`**, com uma letra ou número logo depois. O resto é
 conversa entre pessoas e não é lido, gravado nem marcado como lido (o filtro vem antes da
-deduplicação e do `sendSeen`). Mídia é ignorada. Marcar ou citar outra pessoa não chama o bot.
+deduplicação e do `sendSeen`). Mídia é ignorada, **exceto nota de voz que cita uma mensagem do bot** (M39, abaixo). Marcar ou citar outra pessoa não chama o bot.
 
 - **Citação (M38, ADR-0036):** a mensagem cujo autor citado (`replyTo.participant` ou `_data.Message.<tipo>.contextInfo.participant` com `stanzaID`/`quotedMessage`) é o bot (mesmo reconhecimento da marcação: `me`, `BOT_NUMBER`, LID resolvido) é conversa com ele, sem `@bot` nem comando; com `!`/`/` vale como o comando.
+- **Áudio (M39, ADR-0037):** nota de voz (`audio/*`) só é lida se citar uma mensagem do bot; sem citação é ignorada. Em segundo plano: `ChannelComLid.download_media(media.url)` (caminho da URL, host e API key do bot), recusa > 3 MB, `Transcritor` (Gemini no Vertex; modelo `GEMINI_MODEL_AUDIO` ou `GEMINI_MODEL`; fala como dita, sem corrigir), manda `🎙️ _transcrição_` como primeira mensagem e segue como mensagem marcada comum (`Router.processar(marcado=True)`). Sem fala, áudio longo, sem transcritor ou falha de download/IA: aviso curto, sem chamar o tutor. A transcrição não vai ao log.
 
 - **Marcação (M37):** o webhook reconhece o bot pelos ids marcados na mensagem — no GOWS o campo
   `mentionedIds` vem vazio e a marcação está em `_data.Message.<tipo>.contextInfo.mentionedJID`, com o
@@ -781,7 +782,7 @@ conversa (ver seção 5.1 sobre o caso de áudio não configurado).
   4. Deduplique pelo `id` da mensagem.
   5. Faça `sendSeen` e despache ao roteador, com a lógica síncrona em threadpool. A conversa (IA, atrasos "humanos") roda em segundo plano, depois do 200 (M4, ADR-0006).
   6. **Sempre** devolva 200. Registre as exceções e mande ao usuário uma mensagem curta de erro.
-- Mídia (`hasMedia`, áudio, figurinha etc.): responda que o MVP só entende texto (o M23 só **envia** áudio; a recepção segue recusada).
+- Mídia (`hasMedia`, áudio, figurinha etc.): no privado, responda que o MVP só entende texto (o M23 só **envia** áudio). No grupo (M39, 5.2b) só a nota de voz que cita uma mensagem do bot é lida; o resto é ignorado.
 - `session.status`: registre no log. Se o status sair de `WORKING`, registre em nível WARNING.
 - `GET /health`: `{"ok": true}`, usado pelo healthcheck do compose.
 
@@ -790,7 +791,7 @@ conversa (ver seção 5.1 sobre o caso de áudio não configurado).
 - **Envie sempre para o chatId do remetente autorizado**: o número que o WhatsApp informa (`NUMERO@c.us`, ou o `pn` resolvido do LID), nunca para outro chat. Ele bate com o número da allowlist a menos do nono dígito brasileiro: contas antigas são registradas **sem** o 9, e enviar para o número com o 9 falha no WAHA com "no LID found" (visto no deploy real).
 
 ### 8.3 Cliente (`app/channel/waha.py`)
-Implemente `send_text`, `send_file`, `send_voice`, `send_seen`, `typing(on/off)` e `session_status`, com o header `X-Api-Key` (ou o nome atual segundo a documentação). Timeouts de 15 s, até 2 novas tentativas com backoff para 5xx, logs **sem** a API key. `send_file` e `send_voice` são a exceção: timeout de 90 s e **sem** retentativa (reenviar uma resposta lenta duplicaria o arquivo ou o áudio; quem chama decide o plano B).
+Implemente `send_text`, `send_file`, `send_voice`, `send_seen`, `typing(on/off)`, `session_status` e `download_media` (M39: baixa `media.url` pelo caminho, com o host e a API key do bot), com o header `X-Api-Key` (ou o nome atual segundo a documentação). Timeouts de 15 s, até 2 novas tentativas com backoff para 5xx, logs **sem** a API key. `send_file` e `send_voice` são a exceção: timeout de 90 s e **sem** retentativa (reenviar uma resposta lenta duplicaria o arquivo ou o áudio; quem chama decide o plano B).
 
 ### 8.4 Adaptador de canal
 Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar como lido, digitando) com as implementações `WahaChannel`, `ConsoleChannel` (simulador) e `FakeChannel` (testes). A lógica de negócio **não** pode importar nada do WAHA diretamente, para que seja possível trocar por Cloud API ou Telegram no futuro.
@@ -831,6 +832,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M36 | Desafio semanal do grupo (seção 5.2b/6/7.1, ADR-0034): `!weekly`, `Profile.semanal_*`, estado `WEEKLY_QUIZ`, `Tutor.weekly_questions`/`weekly_answer`, marcação em rodízio, menu `/1` explicar (PT→EN em turma iniciante, só EN de B1-B2), `/2` ouvir, `/3` pular | `make check` e `make test-emulador` passam; sexta 13h dispara (outro dia não; `off` não); uma pergunta por aluno, mensagem começa pela menção; só o marcado avança, outro recebe feedback; `1` PT+EN em A1-A2/A2-B1 e só EN em B2; `2` manda voz e sem áudio avisa; `3`/`skip` pulam, `skipall` encerra; 3h parado fecha; só admin do bot muda `!weekly`; perguntas com o Gemini real conferidas em A1-A2, B1-B2 e C2 |
 | M37 | Grupo responde a quem marca o bot e comandos valem com `!` ou `/` (seções 5.2b/8.1, ADR-0035, muda a regra do ADR-0019): filtro do webhook por marcação (`mentionedIds` número/LID ou `@numero`), `Router.processar(marcado=)`, `grupo.tratar(marcado=)`, menus e cartões do grupo com "tag me", `!add` escondido da ajuda, `weekly_answer` julga coerência com a pergunta sem cobrar o vocabulário | `make check` passa; `@bot stall` num grupo ativo adiciona a palavra; `@bot 4`/`@bot a frase` respondem menu, revisão e desafio; marcar outra pessoa ou conversar não chama o bot (nada gravado, sem `sendSeen`); marcação por LID resolvida; `@bot !help` é comando; `/help` e `/list` valem; `@bot` sozinho mostra a ajuda; a avaliação do desafio não exige as palavras (prompt) |
 | M38 | Grupo responde a quem cita uma mensagem do bot (seções 5.2b/8.1, ADR-0036): `MessagePayload.reply_to`/`ids_do_autor_citado`, `_responde_ao_bot` no webhook | `make check` passa; citar o bot (replyTo/contextInfo, número/LID) responde sem marcar; citar outra pessoa não; citar o bot com `!cmd` vale como o comando; mídia citando o bot segue ignorada |
+| M39 | Nota de voz no grupo, transcrita pelo Gemini, só quando cita uma mensagem do bot (seções 5.2b/8.1/8.3, ADR-0037): `MessagePayload.media`/`eh_audio`, `ChannelComLid.download_media`, `Transcritor` + `FakeTranscritor`, `GEMINI_MODEL_AUDIO`, `messages.audio_transcrito` | `make check` passa; áudio citando o bot vira `🎙️ _texto_` + resposta comum; áudio sem citação, citando outra pessoa ou outra mídia: nada lido, gravado nem marcado como lido; longo, sem fala, sem transcritor e falhas só avisam; `download_media` usa o host e a API key do bot |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 
@@ -954,7 +956,7 @@ vocabot/
     channel/  base.py  waha.py  console.py  parser.py
     domain/   models.py  state.py  choices.py  srs.py  lembretes.py  musica.py
     flows/    router.py  capture.py  practice.py  pronuncia.py  expansion.py  synonyms.py  freeform.py  review.py  song.py  commands.py
-    services/ llm.py  prompts.py  planilha.py  storage.py  lembretes.py  letras.py  tts.py  audio.py
+    services/ llm.py  prompts.py  planilha.py  storage.py  lembretes.py  letras.py  tts.py  audio.py  transcricao.py  fake_transcricao.py   # M39
               log_handler.py  snapshot.py  metricas_destino.py   # M27/M28
     repo/     base.py  memory.py  firestore.py   # Banco (a raiz) + Repository (um espaço), M14
   sim/        __main__.py  tutor.py  letras.py

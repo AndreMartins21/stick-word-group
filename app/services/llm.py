@@ -495,16 +495,19 @@ class LLMTutor:
         )
 
 
-def criar_provider_vertex(*, projeto: str, localizacao: str) -> VertexGeminiProvider:
+def criar_cliente_vertex(*, projeto: str, localizacao: str) -> genai.Client:
     # `vertexai=True` é o nome que funciona em todas as versões do SDK (nas recentes é o apelido
     # legado de `enterprise=True`).
-    cliente = genai.Client(
+    return genai.Client(
         vertexai=True,
         project=projeto,
         location=localizacao,
         http_options=types.HttpOptions(retry_options=_RETENTATIVA_GEMINI),
     )
-    return VertexGeminiProvider(cliente)
+
+
+def criar_provider_vertex(*, projeto: str, localizacao: str) -> VertexGeminiProvider:
+    return VertexGeminiProvider(criar_cliente_vertex(projeto=projeto, localizacao=localizacao))
 
 
 def criar_provider_anthropic(*, api_key: str) -> AnthropicProvider:

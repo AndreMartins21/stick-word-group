@@ -360,3 +360,20 @@ async def test_bot_ids_falha_do_waha_vira_vazio_sem_levantar() -> None:
 
     assert await canal.bot_ids() == set()
     await canal.aclose()
+
+
+async def test_download_media_usa_o_host_e_a_api_key_do_bot_nao_o_da_url() -> None:
+    requisicoes: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requisicoes.append(request)
+        return httpx.Response(200, content=b"ogg-bytes")
+
+    canal = _canal(httpx.MockTransport(handler))
+    conteudo = await canal.download_media("http://localhost:3000/api/files/voz.oga?x=1")
+    await canal.aclose()
+
+    assert conteudo == b"ogg-bytes"
+    (requisicao,) = requisicoes
+    assert str(requisicao.url) == "http://waha:3000/api/files/voz.oga?x=1"
+    assert requisicao.headers["X-Api-Key"] == "segredo-do-teste"

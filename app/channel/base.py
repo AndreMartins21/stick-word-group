@@ -59,3 +59,8 @@ class ChannelComLid(Channel, Protocol):
         """Os dígitos do número e do LID do próprio bot (`me` da sessão), para reconhecer a marcação
         dele num grupo. Nunca levanta: se o canal falhar, vazio (M37)."""
         ...
+
+    async def download_media(self, url: str) -> bytes:
+        """Baixa a mídia que o webhook anunciou em `media.url` (M38). Levanta se falhar: quem chama
+        avisa o grupo. O WAHA exige a API key e a URL pode apontar para o host de fora do compose."""
+        ...

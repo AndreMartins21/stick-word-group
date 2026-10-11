@@ -11,6 +11,7 @@ import base64
 import logging
 import re
 from collections.abc import Sequence
+from urllib.parse import urlsplit
 
 import httpx
 from pydantic import SecretStr
@@ -172,6 +173,17 @@ class WahaChannel:
         }
         self._ids_do_bot = {i for i in ids if i}
         return self._ids_do_bot
+
+    async def download_media(self, url: str) -> bytes:
+        """`GET` no caminho de `media.url` (`/api/files/...`) pelo host e pela API key do bot: o
+        webhook anuncia `http://localhost:3000/...`, que de dentro do compose não é o WAHA. Sem
+        retentativa de rede lenta além da padrão; o tamanho é do chamador conferir."""
+        partes = urlsplit(url)
+        alvo = partes.path + (f"?{partes.query}" if partes.query else "")
+        resposta = await self._com_retentativas(
+            "GET", alvo, json=None, limite_segundos=self._timeout_arquivo
+        )
+        return resposta.content
 
     async def _get(self, path: str) -> httpx.Response:
         return await self._com_retentativas("GET", path, json=None)
