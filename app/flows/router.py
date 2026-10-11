@@ -45,6 +45,8 @@ from app.services.llm import LLMError, Tutor
 
 logger = logging.getLogger(__name__)
 
+MAX_CARACTERES_PADRAO = 500  # M40, ADR-0038
+
 
 class Router:
     def __init__(
@@ -61,6 +63,7 @@ class Router:
         letras: LyricsProvider | None = None,
         audio: ServicoAudio | None = None,
         prefixo_do_grupo: str = "!",
+        max_caracteres: int = MAX_CARACTERES_PADRAO,
         eh_dono: Callable[[str], bool] = lambda _numero: False,
         eh_admin: Callable[[str], bool] | None = None,
         config_grupo: ConfigGrupo | None = None,
@@ -73,6 +76,7 @@ class Router:
         self._letras = letras
         self._audio = audio
         self._prefixo_do_grupo = prefixo_do_grupo
+        self._max_caracteres = max_caracteres
         self._eh_dono = eh_dono
         self._eh_admin = eh_admin
         self._config_grupo = config_grupo or ConfigGrupo()
@@ -141,6 +145,10 @@ class Router:
                 else:
                     return
             d.conversa.usuario_falou()
+            if len(texto.strip()) > self._max_caracteres:
+                # M40 (ADR-0038): recusa antes de tocar no banco ou na IA; a sessão fica como estava.
+                await d.conversa.enviar(messages.texto_longo_demais(self._max_caracteres))
+                return
             perfil = await bloq(self._perfil, d)
             d = self._com_idioma(d, perfil)
             if (

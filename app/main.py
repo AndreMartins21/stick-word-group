@@ -177,6 +177,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         status_da_sessao=canal.session_status,
         exportador=ExportadorExcel(_criar_armazenamento(settings)),
         prefixo_do_grupo=settings.group_prefix,
+        max_caracteres=settings.max_caracteres,
         eh_dono=settings.eh_dono,
         eh_admin=lambda numero: admin.eh_admin(_acesso(settings, canal, banco), numero),
         config_grupo=ConfigGrupo(

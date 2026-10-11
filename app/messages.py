@@ -50,6 +50,11 @@ ERRO_AUDIO = "🔊 I couldn't make the audio right now. Try again in a bit?"
 PAGINA_INVALIDA = "That page doesn't exist. Use /list to see the first one."
 
 
+def texto_longo_demais(maximo: int) -> str:
+    """Mensagem acima de `MAX_CARACTERES` (M40, ADR-0038): recusada sem chamar a IA."""
+    return f"✂️ That message is too long for me (max {maximo} characters). Can you shorten it?"
+
+
 def audio_transcrito(texto: str) -> str:
     """O que o bot ouviu, mostrado como a primeira mensagem antes da resposta (M38)."""
     return f"🎙️ _{texto}_"

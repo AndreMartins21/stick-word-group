@@ -78,6 +78,7 @@ A VM tem só 1 GB de RAM. Crie um **swap de 2 GB**, limite a memória dos contai
 | `GROUP_PREFIX` | `.env.infra` (opcional) | Padrão `!`: em grupo o bot só lê mensagens que começam com isto (M16, ADR-0019); 1 ou 2 símbolos, sem letras, números nem a barra |
 | `LIMITE_POR_SESSAO_GRUPO` | `.env.infra` (opcional) | Padrão `5`: palavras por rodada de revisão em grupo (M17, ADR-0020); no privado é dinâmico, `MIN(palavras do aluno, 7)` (M24), a menos que `/reviewsize`/`/reminders` fixe outro valor |
 | `TIMEOUT_MARCACAO_HORAS` | `.env.infra` (opcional) | Padrão `3`: quanto esperar a pessoa marcada numa revisão em grupo antes de passar o card ao próximo aluno |
+| `MAX_CARACTERES` | `.env.infra` (opcional) | Padrão `500` (M40, ADR-0038): acima disso a mensagem é recusada sem chamar a IA |
 | `CONTACT_EMAIL` | `.env.infra` (opcional) | E-mail que o aviso "você não tem um plano" mostra a quem não está na lista (M15) |
 | `BOT_NUMBER` | `.env.infra` | Número Vivo do bot, só dígitos (informativo/logs) |
 | `WAHA_URL` | compose | `http://waha:3000` |
@@ -407,6 +408,7 @@ Send me another word or expression whenever you want.
 - Espere de 1 a 2 s (aleatório) antes de cada envio.
 - **Nunca** envie mensagem para um número fora da allowlist (`ALLOWED_NUMBER`/`ALLOWED_NUMBERS`, seção 8.2): só ao chat de quem escreveu.
 - Nunca mande mais de 3 mensagens seguidas sem uma resposta do usuário (o limite vale por espaço, M14).
+- **Texto acima de `MAX_CARACTERES` (500) é recusado** (M40, ADR-0038) com um aviso curto, antes do banco e da IA; no grupo só vale para o que o bot lê (marcação, citação, comando).
 - **A IA nunca é chamada para quem não tem plano** (M15): número fora da lista só recebe o aviso "você
   não tem um plano" (texto em inglês com a linha 🇧🇷, e o e-mail de `CONTACT_EMAIL`), no máximo uma
   vez a cada 7 dias por número, e depois silêncio, sem `sendSeen`, sem ler nem gravar nada.
@@ -833,6 +835,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M37 | Grupo responde a quem marca o bot e comandos valem com `!` ou `/` (seções 5.2b/8.1, ADR-0035, muda a regra do ADR-0019): filtro do webhook por marcação (`mentionedIds` número/LID ou `@numero`), `Router.processar(marcado=)`, `grupo.tratar(marcado=)`, menus e cartões do grupo com "tag me", `!add` escondido da ajuda, `weekly_answer` julga coerência com a pergunta sem cobrar o vocabulário | `make check` passa; `@bot stall` num grupo ativo adiciona a palavra; `@bot 4`/`@bot a frase` respondem menu, revisão e desafio; marcar outra pessoa ou conversar não chama o bot (nada gravado, sem `sendSeen`); marcação por LID resolvida; `@bot !help` é comando; `/help` e `/list` valem; `@bot` sozinho mostra a ajuda; a avaliação do desafio não exige as palavras (prompt) |
 | M38 | Grupo responde a quem cita uma mensagem do bot (seções 5.2b/8.1, ADR-0036): `MessagePayload.reply_to`/`ids_do_autor_citado`, `_responde_ao_bot` no webhook | `make check` passa; citar o bot (replyTo/contextInfo, número/LID) responde sem marcar; citar outra pessoa não; citar o bot com `!cmd` vale como o comando; mídia citando o bot segue ignorada |
 | M39 | Nota de voz no grupo, transcrita pelo Gemini, só quando cita uma mensagem do bot (seções 5.2b/8.1/8.3, ADR-0037): `MessagePayload.media`/`eh_audio`, `ChannelComLid.download_media`, `Transcritor` + `FakeTranscritor`, `GEMINI_MODEL_AUDIO`, `messages.audio_transcrito` | `make check` passa; áudio citando o bot vira `🎙️ _texto_` + resposta comum; áudio sem citação, citando outra pessoa ou outra mídia: nada lido, gravado nem marcado como lido; longo, sem fala, sem transcritor e falhas só avisam; `download_media` usa o host e a API key do bot |
+| M40 | Limite de caracteres por mensagem (seções 4/5.6): `MAX_CARACTERES` (padrão 500), checado no `Router.processar` antes do banco e da IA (ADR-0038) | `make check` passa; texto de 501 caracteres recebe `texto_longo_demais` sem chamar o tutor, no privado e no grupo; 500 passa; conversa entre pessoas no grupo segue ignorada |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 

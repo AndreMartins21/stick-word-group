@@ -20,7 +20,7 @@ NivelUsuario = Literal["A1-A2", "A2-B1", "B1-B2", "B2-C1", "C1-C2", "C2"]
 ProvedorLLM = Literal["vertex_gemini", "anthropic"]
 AmbienteApp = Literal["local", "prod"]
 CONTATO_PADRAO = "smartins.bot@gmail.com"
-_NUMERICOS = {"max_groups", "limite_por_sessao_grupo", "timeout_marcacao_horas"}
+_NUMERICOS = {"max_groups", "limite_por_sessao_grupo", "timeout_marcacao_horas", "max_caracteres"}
 
 
 class Settings(BaseSettings):
@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     # Revisão em grupo (M17, ADR-0020): palavras por rodada e quanto esperar a pessoa marcada.
     limite_por_sessao_grupo: int = Field(default=5, ge=1)
     timeout_marcacao_horas: float = Field(default=3.0, gt=0)
+    # Teto de caracteres de uma mensagem que chega à IA (M40, ADR-0038): acima disso o bot recusa
+    # sem chamar o modelo. Nenhuma palavra, frase ou resposta de prática passa de algumas centenas.
+    max_caracteres: int = Field(default=500, ge=20)
     bot_number: str
     user_level: NivelUsuario = "B1-B2"
     # Fuso do aluno, para distribuir os lembretes de revisão espaçada (seção 5.7, M10).
