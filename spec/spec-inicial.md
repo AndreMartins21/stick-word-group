@@ -80,6 +80,7 @@ A VM tem só 1 GB de RAM. Crie um **swap de 2 GB**, limite a memória dos contai
 | `TIMEOUT_MARCACAO_HORAS` | `.env.infra` (opcional) | Padrão `3`: quanto esperar a pessoa marcada numa revisão em grupo antes de passar o card ao próximo aluno |
 | `MAX_CARACTERES` | `.env.infra` (opcional) | Padrão `500` (M40, ADR-0038): acima disso a mensagem é recusada sem chamar a IA |
 | `MAX_SEGUNDOS_AUDIO` | `.env.infra` (opcional) | Padrão `60` (M41, ADR-0039): nota de voz acima disso é recusada pela duração do payload, sem baixar |
+| `LIMITE_PESSOA_MINUTO` / `LIMITE_PESSOA_DIA` / `LIMITE_GRUPO_DIA` / `LIMITE_AUDIO_SEGUNDOS_DIA` | `.env.infra` (opcionais) | Padrão `6` / `150` / `400` / `600` (M43, ADR-0041): mensagens por pessoa por minuto e por dia, mensagens por grupo por dia e segundos de áudio por pessoa por dia; o dono não é limitado |
 | `CONTACT_EMAIL` | `.env.infra` (opcional) | E-mail que o aviso "você não tem um plano" mostra a quem não está na lista (M15) |
 | `BOT_NUMBER` | `.env.infra` | Número Vivo do bot, só dígitos (informativo/logs) |
 | `WAHA_URL` | compose | `http://waha:3000` |
@@ -409,6 +410,7 @@ Send me another word or expression whenever you want.
 - Espere de 1 a 2 s (aleatório) antes de cada envio.
 - **Nunca** envie mensagem para um número fora da allowlist (`ALLOWED_NUMBER`/`ALLOWED_NUMBERS`, seção 8.2): só ao chat de quem escreveu.
 - Nunca mande mais de 3 mensagens seguidas sem uma resposta do usuário (o limite vale por espaço, M14).
+- **Limite de uso (M43, ADR-0041):** por pessoa 6/min e 150/dia, por grupo 400/dia, 600 s de áudio/dia por pessoa, em memória (janela deslizante). A primeira recusa avisa uma vez, o resto fica em silêncio; conversa entre pessoas no grupo não conta; o dono não é limitado.
 - **Texto acima de `MAX_CARACTERES` (500) é recusado** (M40, ADR-0038) com um aviso curto, antes do banco e da IA; no grupo só vale para o que o bot lê (marcação, citação, comando).
 - **A IA nunca é chamada para quem não tem plano** (M15): número fora da lista só recebe o aviso "você
   não tem um plano" (texto em inglês com a linha 🇧🇷, e o e-mail de `CONTACT_EMAIL`), no máximo uma
@@ -839,6 +841,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M40 | Limite de caracteres por mensagem (seções 4/5.6): `MAX_CARACTERES` (padrão 500), checado no `Router.processar` antes do banco e da IA (ADR-0038) | `make check` passa; texto de 501 caracteres recebe `texto_longo_demais` sem chamar o tutor, no privado e no grupo; 500 passa; conversa entre pessoas no grupo segue ignorada |
 | M41 | Limite de duração e de bytes do áudio (seções 5.2b/8.3): `MAX_SEGUNDOS_AUDIO` (padrão 60) lido do `audioMessage.seconds`, `download_media(max_bytes)` em streaming, teto de 1 MB, eco da transcrição cortado em 300 caracteres (ADR-0039) | `make check` passa; áudio com `seconds` acima do teto ou `fileLength` acima de 1 MB é recusado sem baixar; sem os campos, o download aborta ao passar de 1 MB sem ler o resto; o eco da transcrição passa de 300 caracteres só com `…` |
 | M42 | WAHA só baixa áudio (seções 10.7/8.3): `WAHA_EVENTS_DOWNLOAD_MEDIA_MIMETYPES=audio` e `WHATSAPP_FILES_LIFETIME` explícito no compose (ADR-0040) | `make check` passa; `docker compose config` válido; teste confere o filtro e o tempo de vida dos arquivos; vídeo/foto/documento de qualquer chat chegam com `media.url` nulo e nada vai ao disco |
+| M43 | Limite de uso (seções 4/5.6/12): `LimitadorDeUso` em janela deslizante, por pessoa (6/min, 150/dia), por grupo (400/dia) e segundos de áudio por pessoa (600/dia), `Router.admitir`, evento `limite_atingido` (ADR-0041) | `make check` passa; a 7ª mensagem no minuto recebe um aviso e as seguintes nada, sem chegar à IA; recusa não consome a janela; o dono não é limitado; conversa entre pessoas no grupo não gasta limite; áudio acima do orçamento não é baixado |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 
@@ -1011,6 +1014,8 @@ Catálogo de eventos:
 | `grupo_pendente` | `main.py:_registrar_pendente` | `espaco` | funil de ativação de grupos |
 | `saiu_de_grupo` | `Agendador._sair_de_grupos_pendentes` | `espaco` | grupos abandonados em 24h |
 | `numero_sem_plano` | `main.py:_avisar_sem_plano` | — | demanda reprimida |
+| `limite_atingido` | `Router.admitir` (M43) | `espaco`, `tipo_espaco`, `motivo` (`minuto`\|`dia`\|`grupo`\|`audio`), `avisou` | abuso e flood, limites apertados demais |
+| `audio_recusado` | `main.py:_transcrever` (M41) | `motivo` (`duracao_ou_tamanho_declarado`\|`tamanho_baixado`) | áudio acima do teto |
 | `waha_status` | `main.py:_tratar_status_sessao` | `ok`, `motivo` (o status) | disponibilidade do WhatsApp |
 | `inicio` | `main.py:_lifespan` | — | reinícios/crash loop |
 | `snapshot_ok` | `Agendador._rodar_snapshot_se_for_a_hora` | `n` (linhas gravadas), `latencia_ms` | o painel sabe se o próprio dado está fresco |

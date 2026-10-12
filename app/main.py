@@ -74,6 +74,8 @@ from app.services.tts import GoogleTts
 
 logger = logging.getLogger(__name__)
 
+SEGUNDOS_ESTIMADOS_DO_AUDIO = 30  # M43: quando o payload não traz `audioMessage.seconds`
+
 
 def _nome_do_comando(corpo: str, prefixo: str) -> str:
     """Só para o evento `mensagem_recebida` (M27, seção 12 da spec): um rótulo grosseiro, nunca o
@@ -178,6 +180,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         exportador=ExportadorExcel(_criar_armazenamento(settings)),
         prefixo_do_grupo=settings.group_prefix,
         max_caracteres=settings.max_caracteres,
+        limites=settings.limites,
         eh_dono=settings.eh_dono,
         eh_admin=lambda numero: admin.eh_admin(_acesso(settings, canal, banco), numero),
         config_grupo=ConfigGrupo(
@@ -668,10 +671,11 @@ async def _responder_no_grupo(
     texto: str,
     autor: Autor,
     marcado: bool = False,
+    admitida: bool = False,
 ) -> None:
     """Roda depois do 200, como `_responder`: nada que aconteça aqui pode escapar."""
     try:
-        await router.processar(texto, grupo_id, autor, marcado=marcado)
+        await router.processar(texto, grupo_id, autor, marcado=marcado, admitida=admitida)
     except Exception:
         logger.exception("falha ao processar mensagem de grupo")
         with contextlib.suppress(Exception):
@@ -690,6 +694,11 @@ async def _responder_ao_audio_no_grupo(
     """Roda depois do 200: baixa o áudio, transcreve, mostra o que ouviu como primeira mensagem e
     segue como uma mensagem marcada comum (M38, ADR-0036). O texto transcrito não vai ao log."""
     try:
+        # M43 (ADR-0041): o limite de uso vale ANTES de baixar e transcrever (o custo está aí);
+        # sem a duração no payload, conta uma estimativa.
+        segundos = payload.segundos_do_audio() or SEGUNDOS_ESTIMADOS_DO_AUDIO
+        if not await router.admitir(grupo_id, autor, segundos_de_audio=segundos):
+            return
         texto = await _transcrever(channel, transcritor, payload, grupo_id, max_segundos)
     except Exception:
         logger.exception("falha ao transcrever o áudio do grupo")
@@ -699,7 +708,7 @@ async def _responder_ao_audio_no_grupo(
     if texto is None:
         return
     await channel.send_text(grupo_id, messages.audio_transcrito(texto))
-    await _responder_no_grupo(router, channel, grupo_id, texto, autor, marcado=True)
+    await _responder_no_grupo(router, channel, grupo_id, texto, autor, marcado=True, admitida=True)
 
 
 async def _transcrever(

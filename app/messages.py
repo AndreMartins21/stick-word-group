@@ -49,6 +49,12 @@ ERRO_AUDIO = "🔊 I couldn't make the audio right now. Try again in a bit?"
 PAGINA_INVALIDA = "That page doesn't exist. Use /list to see the first one."
 
 
+DEVAGAR = "⏳ Easy there! I can't keep up that fast. Let's continue in a minute."
+LIMITE_DO_DIA = "⏳ You've reached today's limit of messages for me. Let's continue tomorrow!"
+LIMITE_DO_GRUPO = "⏳ This group has reached today's limit of messages for me. Back tomorrow!"
+LIMITE_DE_AUDIO = "🎙️ You've used up today's voice-message time with me. Text still works!"
+
+
 def texto_longo_demais(maximo: int) -> str:
     """Mensagem acima de `MAX_CARACTERES` (M40, ADR-0038): recusada sem chamar a IA."""
     return f"✂️ That message is too long for me (max {maximo} characters). Can you shorten it?"

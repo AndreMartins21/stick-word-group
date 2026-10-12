@@ -41,6 +41,7 @@ CAMPOS_DE_EVENTO = (
     "qualidade",
     "marcado",
     "motivo",
+    "avisou",
 )
 
 

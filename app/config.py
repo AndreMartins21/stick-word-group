@@ -15,6 +15,7 @@ from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.channel.parser import numero_e_permitido
+from app.services.limites import Limites
 
 NivelUsuario = Literal["A1-A2", "A2-B1", "B1-B2", "B2-C1", "C1-C2", "C2"]
 ProvedorLLM = Literal["vertex_gemini", "anthropic"]
@@ -26,6 +27,10 @@ _NUMERICOS = {
     "timeout_marcacao_horas",
     "max_caracteres",
     "max_segundos_audio",
+    "limite_pessoa_minuto",
+    "limite_pessoa_dia",
+    "limite_grupo_dia",
+    "limite_audio_segundos_dia",
 }
 
 
@@ -60,6 +65,11 @@ class Settings(BaseSettings):
     # Duração máxima de uma nota de voz que o bot ouve (M41, ADR-0039), conferida no payload antes de
     # baixar. 60 s cabem em ~500 caracteres falados, o mesmo teto do texto.
     max_segundos_audio: int = Field(default=60, ge=5)
+    # Limites de uso (M43, ADR-0041), em memória, por pessoa e por grupo. O dono não é limitado.
+    limite_pessoa_minuto: int = Field(default=6, ge=1)
+    limite_pessoa_dia: int = Field(default=150, ge=1)
+    limite_grupo_dia: int = Field(default=400, ge=1)
+    limite_audio_segundos_dia: int = Field(default=600, ge=1)
     bot_number: str
     user_level: NivelUsuario = "B1-B2"
     # Fuso do aluno, para distribuir os lembretes de revisão espaçada (seção 5.7, M10).
@@ -180,6 +190,15 @@ class Settings(BaseSettings):
     @property
     def dono(self) -> str:
         return re.sub(r"\D", "", self.owner_number or "") or self.numeros_permitidos[0]
+
+    @property
+    def limites(self) -> Limites:
+        return Limites(
+            pessoa_por_minuto=self.limite_pessoa_minuto,
+            pessoa_por_dia=self.limite_pessoa_dia,
+            grupo_por_dia=self.limite_grupo_dia,
+            audio_segundos_por_dia=self.limite_audio_segundos_dia,
+        )
 
     def eh_dono(self, numero: str) -> bool:
         """Compara aceitando a variação do nono dígito (a conta pode estar registrada sem o 9)."""

@@ -38,9 +38,11 @@ from app.flows import (
 from app.flows.base import FUSO_PADRAO, Autor, ConfigGrupo, Deps, bloq
 from app.flows.commands import Exportador, StatusDaSessao
 from app.flows.conversa import Conversa
+from app.logging_config import id_curto, registrar_evento
 from app.repo.base import Banco
 from app.services.audio import ServicoAudio
 from app.services.letras import LyricsProvider
+from app.services.limites import Decisao, LimitadorDeUso, Limites
 from app.services.llm import LLMError, Tutor
 
 logger = logging.getLogger(__name__)
@@ -64,6 +66,7 @@ class Router:
         audio: ServicoAudio | None = None,
         prefixo_do_grupo: str = "!",
         max_caracteres: int = MAX_CARACTERES_PADRAO,
+        limites: Limites | None = None,
         eh_dono: Callable[[str], bool] = lambda _numero: False,
         eh_admin: Callable[[str], bool] | None = None,
         config_grupo: ConfigGrupo | None = None,
@@ -77,6 +80,9 @@ class Router:
         self._audio = audio
         self._prefixo_do_grupo = prefixo_do_grupo
         self._max_caracteres = max_caracteres
+        # M43 (ADR-0041): sem `limites` não há teto (testes e simulador); a produção passa os do
+        # `Settings`.
+        self._limitador = LimitadorDeUso(limites, agora) if limites is not None else None
         self._eh_dono = eh_dono
         self._eh_admin = eh_admin
         self._config_grupo = config_grupo or ConfigGrupo()
@@ -124,13 +130,62 @@ class Router:
             conversa.usuario_falou()
             await conversa.enviar(messages.MIDIA_NAO_SUPORTADA)
 
+    async def admitir(
+        self, chat_id: str, autor: Autor | None, *, segundos_de_audio: int = 0
+    ) -> bool:
+        """Limite de uso por pessoa e por grupo (M43, ADR-0041): gasta uma mensagem (e, para áudio,
+        os segundos) da janela. Na primeira recusa de uma sequência avisa uma vez; depois, silêncio.
+        O dono nunca é limitado. Chamado por `processar` e, para áudio, antes de transcrever."""
+        if self._limitador is None or (autor is not None and self._eh_dono(autor.numero)):
+            return True
+        em_grupo = chat_id.endswith("@g.us")
+        pessoa = autor.numero if autor is not None else chat_id
+        decisao = self._limitador.admitir(
+            pessoa, chat_id, em_grupo=em_grupo, segundos_de_audio=segundos_de_audio
+        )
+        if decisao.permitido:
+            return True
+        registrar_evento(
+            logger,
+            "limite_atingido",
+            espaco=id_curto(chat_id),
+            tipo_espaco="grupo" if em_grupo else "privado",
+            motivo=decisao.motivo,
+            avisou=decisao.avisar,
+        )
+        if decisao.avisar:
+            await self._avisar_limite(chat_id, decisao)
+        return False
+
+    async def _avisar_limite(self, chat_id: str, decisao: Decisao) -> None:
+        texto = {
+            "minuto": messages.DEVAGAR,
+            "dia": messages.LIMITE_DO_DIA,
+            "grupo": messages.LIMITE_DO_GRUPO,
+            "audio": messages.LIMITE_DE_AUDIO,
+        }[decisao.motivo or "minuto"]
+        async with self._trava(chat_id):
+            conversa = self.conversa_do(chat_id)
+            conversa.usuario_falou()
+            await conversa.enviar(texto)
+
     async def processar(
-        self, texto: str, chat_id: str, autor: Autor | None = None, *, marcado: bool = False
+        self,
+        texto: str,
+        chat_id: str,
+        autor: Autor | None = None,
+        *,
+        marcado: bool = False,
+        admitida: bool = False,
     ) -> None:
         """`chat_id` é o espaço E o destino das respostas: o chat de onde a mensagem veio. Em
         grupo (M16) `autor` é quem escreveu e `texto` vem COM o prefixo (`!` ou `/`, um comando)
         ou, com `marcado` (M37, ADR-0035), sem a marcação do bot (conversa com ele). Sem uma coisa
         nem outra é conversa entre pessoas e nada acontece."""
+        if not admitida and not self._eh_para_o_bot(texto, chat_id, autor, marcado):
+            return
+        if not admitida and not await self.admitir(chat_id, autor):
+            return
         async with self._trava(chat_id):
             d = self._deps(chat_id, autor)
             de_grupo: tuple[Autor, str, bool] | None = None
@@ -202,6 +257,14 @@ class Router:
                 return
 
             await bloq(d.repo.salvar_sessao, self._com_prazo(d, nova))
+
+    def _eh_para_o_bot(self, texto: str, chat_id: str, autor: Autor | None, marcado: bool) -> bool:
+        """Em grupo, conversa entre pessoas não é do bot: nem gasta o limite nem recebe aviso."""
+        if not chat_id.endswith("@g.us"):
+            return True
+        return autor is not None and (
+            marcado or grupo.sem_prefixo(texto, self._prefixo_do_grupo) is not None
+        )
 
     @staticmethod
     def _com_prazo(d: Deps, sessao: Sessao) -> Sessao:

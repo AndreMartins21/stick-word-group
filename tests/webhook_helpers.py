@@ -20,6 +20,7 @@ from app.main import app, get_banco, get_channel, get_router, get_settings, get_
 from app.repo.memory import MemoryBanco
 from app.services.fake_llm import FakeTutor
 from app.services.fake_transcricao import FakeTranscritor
+from app.services.limites import Limites
 from tests.helpers import T0, explicacao_stall
 
 DONO = "5531999998888"
@@ -45,7 +46,7 @@ class Ambiente:
 
 
 @contextmanager
-def criar_ambiente() -> Iterator[Ambiente]:
+def criar_ambiente(limites: Limites | None = None) -> Iterator[Ambiente]:
     canal = FakeChannel()
     settings = Settings(
         _env_file=None,
@@ -66,6 +67,7 @@ def criar_ambiente() -> Iterator[Ambiente]:
         criar_conversa=lambda chat: Conversa(canal, chat, dormir=_sem_espera, atraso=lambda: 0.0),
         nivel_padrao="B1-B2",
         prefixo_do_grupo=settings.group_prefix,
+        limites=limites,
         eh_dono=settings.eh_dono,
         config_grupo=ConfigGrupo(
             limite=settings.limite_por_sessao_grupo,
