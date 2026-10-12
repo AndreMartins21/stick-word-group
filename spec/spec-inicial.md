@@ -861,6 +861,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M53 | Backup (seção 10.9): `infra/setup_backup.sh` cria a snapshot schedule diária do disco (7 dias) e liga o PITR do Firestore; `infra/setup_orcamento.sh` usa o número do projeto e a moeda da conta (ADR-0051) | `DRY_RUN=1 bash infra/setup_backup.sh` mostra os 3 comandos; rodando, `gcloud compute disks describe` lista a política e o Firestore mostra PITR habilitado |
 | M54 | `!delete` restrito (seção 5.2b, ADR-0052): `commands.apagar(pode_apagar=)`; no grupo só o autor da entrada (`Entry.autor_id`), admin do bot ou o dono apagam | `make check` passa; outro aluno recebe a recusa e a palavra fica; admin e dono apagam qualquer palavra; entrada sem autor só o admin apaga; o privado não muda |
 | M55 | Jitter nos lembretes do grupo (seção 5.2b/5.7, ADR-0053): `agenda_grupo.jitter_do_espaco` (-20 a +20 min, fixo por grupo e tipo), `proxima_diaria`/`proxima_semanal` com `jitter`, `Agendador(jitter_do_grupo=)`; `!daily`/`!weekly`/`!group` avisam a janela | `make check` passa; o próximo horário do grupo cai entre 18:40 e 19:20 para 19h e é sempre o mesmo para o mesmo grupo; o dia útil escolhido não muda; os textos dizem "around 19:00 (may arrive up to 20 min earlier or later)" |
+| M56 | Contingência do número (seção 10.6b, ADR-0054): `infra/setup_alerta_sessao.sh` (alerta por e-mail quando `waha_status` vai a `FAILED`/`STOPPED`/`SCAN_QR_CODE`) e `docs/runbooks/banimento-do-numero.md` | `make check` passa; `DRY_RUN=1 ALERTA_EMAIL=... bash infra/setup_alerta_sessao.sh` mostra o canal e a política em JSON válido; o runbook cobre re-parear, número reserva, `BOT_NUMBER` e o aviso às turmas |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 
@@ -924,6 +925,9 @@ Mostre também como ver a senha do painel **localmente e só quando eu pedir** (
 - `infra/logs.sh`: `docker compose logs -f --tail=200`.
 - `infra/ssh.sh`: abre um ssh via IAP.
 - `infra/smoke_test.sh`: pela VM (via `infra/vm/smoke_remoto.sh`), testa `GET /health` do bot e verifica se a sessão do WAHA está `WORKING`, **esperando** até 3 minutos por cada um: depois de um deploy que recria o WAHA, o GOWS demora para subir e reinicia algumas vezes.
+
+### 10.6b Contingência do número (M56, ADR-0054)
+`infra/setup_alerta_sessao.sh` (idempotente, `DRY_RUN=1`, `ALERTA_EMAIL` obrigatório) cria o canal de e-mail e o alerta `vocabot-sessao-whatsapp-caiu`, baseado em log: `waha_status` com `motivo` `FAILED`, `STOPPED` ou `SCAN_QR_CODE`. O roteiro de resposta (re-parear x trocar pelo número reserva, `BOT_NUMBER`, aviso às turmas) está em `docs/runbooks/banimento-do-numero.md`.
 
 ### 10.7 `docker-compose.yml`
 - `waha`:

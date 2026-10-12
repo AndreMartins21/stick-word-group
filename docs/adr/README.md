@@ -63,6 +63,7 @@ operacional: numeração, status e o índice.
 | [0051](0051-backup-do-disco-e-pitr-do-firestore.md) | Backup do disco da VM e Point-in-Time Recovery do Firestore | Aceito | 2026-10-12 |
 | [0052](0052-delete-so-do-autor-ou-admin.md) | `!delete` no grupo só para quem adicionou a palavra, admin do bot ou dono | Aceito | 2026-10-12 |
 | [0053](0053-jitter-nos-lembretes-do-grupo.md) | Jitter de -20 a +20 min nos lembretes diário e semanal de cada grupo | Aceito | 2026-10-12 |
+| [0054](0054-contingencia-do-numero-do-bot.md) | Contingência para sessão caída ou número banido: alerta por e-mail e runbook | Aceito | 2026-10-12 |
 
 ## Quando escrever um
 
