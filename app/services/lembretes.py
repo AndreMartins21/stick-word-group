@@ -20,7 +20,12 @@ from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from app import messages
-from app.domain.agenda_grupo import MAX_REVISOES_SEM_RESPOSTA, proxima_diaria, proxima_semanal
+from app.domain.agenda_grupo import (
+    MAX_REVISOES_SEM_RESPOSTA,
+    jitter_do_espaco,
+    proxima_diaria,
+    proxima_semanal,
+)
 from app.domain.lembretes import proximo_horario
 from app.domain.models import Estado, Profile
 from app.domain.state import expirou
@@ -59,6 +64,7 @@ class Agendador:
         hora_do_snapshot: int = HORA_PADRAO_DO_SNAPSHOT,
         orcamento: Orcamento | None = None,
         avisar_dono: Callable[[str], Awaitable[None]] | None = None,
+        jitter_do_grupo: Callable[[str, str], timedelta] = jitter_do_espaco,
     ) -> None:
         self._router = router
         self._banco = banco
@@ -76,6 +82,8 @@ class Agendador:
         # M46 (ADR-0044): orçamento diário esgotado pausa os lembretes e avisa o dono uma vez.
         self._orcamento = orcamento
         self._avisar_dono = avisar_dono
+        # M55 (ADR-0053): deslocamento fixo de cada grupo (os testes fixam em zero).
+        self._jitter = jitter_do_grupo
         self._parar = False
 
     def parar(self) -> None:
@@ -278,7 +286,7 @@ class Agendador:
         ]
         if calcular:
             for tipo in calcular:
-                perfil = self._com_horario(perfil, tipo, agora_local)
+                perfil = self._com_horario(perfil, tipo, agora_local, espaco_id)
             await bloq(repo.salvar_perfil, perfil)
         for tipo in ("semanal", "diaria"):
             proximo = getattr(perfil, f"proxima_{tipo}")
@@ -286,15 +294,26 @@ class Agendador:
                 await self._disparar_grupo(repo, espaco_id, perfil, tipo)
                 return
 
-    @staticmethod
-    def _com_horario(perfil: Profile, tipo: str, agora_local: datetime) -> Profile:
+    def _com_horario(
+        self, perfil: Profile, tipo: str, agora_local: datetime, espaco_id: str
+    ) -> Profile:
+        """O próximo horário do grupo, com o `jitter` fixo dele (M55, ADR-0053)."""
+        jitter = self._jitter(espaco_id, tipo)
         if tipo == "semanal":
             novo = proxima_semanal(
-                agora_local, perfil.semanal_dia, perfil.semanal_hora, perfil.semanal_minuto
+                agora_local,
+                perfil.semanal_dia,
+                perfil.semanal_hora,
+                perfil.semanal_minuto,
+                jitter,
             )
         else:
             novo = proxima_diaria(
-                agora_local, perfil.diaria_hora, perfil.diaria_minuto, perfil.diaria_fim_de_semana
+                agora_local,
+                perfil.diaria_hora,
+                perfil.diaria_minuto,
+                perfil.diaria_fim_de_semana,
+                jitter,
             )
         return perfil.model_copy(update={f"proxima_{tipo}": novo.astimezone(UTC)})
 
@@ -315,7 +334,7 @@ class Agendador:
             registrar_evento(
                 logger, "lembrete_desistido", espaco=espaco, tipo_espaco="grupo", motivo=motivo
             )
-            await bloq(repo.salvar_perfil, self._com_horario(perfil, tipo, agora_local))
+            await bloq(repo.salvar_perfil, self._com_horario(perfil, tipo, agora_local, espaco_id))
             return
 
         sessao = await bloq(repo.obter_sessao)
@@ -336,7 +355,7 @@ class Agendador:
             registrar_evento(
                 logger, "lembrete_adiado", espaco=espaco, tipo_espaco="grupo", motivo="nada_vencido"
             )
-            await bloq(repo.salvar_perfil, self._com_horario(perfil, tipo, agora_local))
+            await bloq(repo.salvar_perfil, self._com_horario(perfil, tipo, agora_local, espaco_id))
             return
 
         await bloq(
@@ -353,7 +372,9 @@ class Agendador:
 
         perfil_apos = await bloq(repo.obter_perfil)
         if perfil_apos is not None:
-            await bloq(repo.salvar_perfil, self._com_horario(perfil_apos, tipo, agora_local))
+            await bloq(
+                repo.salvar_perfil, self._com_horario(perfil_apos, tipo, agora_local, espaco_id)
+            )
 
     async def _agendar_proximo(
         self, repo: Repository, perfil: Profile, agora_local: datetime

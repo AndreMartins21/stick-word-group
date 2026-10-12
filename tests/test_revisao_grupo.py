@@ -17,7 +17,7 @@ from app.services.fake_llm import FakeTutor
 from app.services.fake_tts import FakeSintetizador
 from app.services.lembretes import Agendador
 from app.services.storage import CacheAudioEmMemoria
-from tests.helpers import ANA, BIA, CAIO, GRUPO, T0, Montagem, eventos, montar
+from tests.helpers import ANA, BIA, CAIO, GRUPO, T0, Montagem, eventos, montar, sem_jitter
 
 SENTIDO = SentidoSalvo(traducao="travar", definicao="to stop making progress")
 
@@ -221,6 +221,7 @@ def _agendador(m: Montagem) -> Agendador:
         agora=m.relogio.agora,
         fuso=ZoneInfo("America/Sao_Paulo"),
         dormir=dormir,
+        jitter_do_grupo=sem_jitter,
     )
 
 

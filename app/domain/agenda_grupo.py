@@ -3,6 +3,7 @@ parser dos argumentos de `!daily`. Funções puras, sem fuso: quem converte é o
 
 from __future__ import annotations
 
+import hashlib
 import re
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -34,19 +35,36 @@ for _i, _nomes in enumerate(
 NOMES_DOS_DIAS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
 
+# M55 (ADR-0053): cada grupo recebe a diária e o desafio semanal um pouco antes ou depois do horário
+# configurado (de -20 a +20 min, fixo por grupo), para os grupos não dispararem todos no mesmo minuto.
+JITTER_MINUTOS = 20
+
+
+def jitter_do_espaco(espaco_id: str, tipo: str) -> timedelta:
+    """O deslocamento fixo (de -20 a +20 min, em minutos inteiros) de um grupo para `tipo`
+    (`diaria`|`semanal`). Determinístico: o mesmo grupo recebe sempre no mesmo minuto."""
+    resumo = hashlib.sha256(f"{tipo}:{espaco_id}".encode()).digest()
+    faixa = 2 * JITTER_MINUTOS + 1
+    return timedelta(minutes=int.from_bytes(resumo[:4], "big") % faixa - JITTER_MINUTOS)
+
+
 def _dia_aceito(dia: datetime, fim_de_semana: bool) -> bool:
     return fim_de_semana or dia.weekday() < 5
 
 
-def proxima_diaria(agora_local: datetime, hora: int, minuto: int, fim_de_semana: bool) -> datetime:
-    """O próximo `hora:minuto` depois de `agora_local`, pulando sábado e domingo se
-    `fim_de_semana` é falso."""
+def proxima_diaria(
+    agora_local: datetime,
+    hora: int,
+    minuto: int,
+    fim_de_semana: bool,
+    jitter: timedelta = timedelta(0),
+) -> datetime:
+    """O próximo `hora:minuto` (mais `jitter`) depois de `agora_local`, pulando sábado e domingo
+    se `fim_de_semana` é falso. O dia é o do horário configurado, o `jitter` só desloca o minuto."""
     candidato = agora_local.replace(hour=hora, minute=minuto, second=0, microsecond=0)
-    if candidato <= agora_local:
+    while not _dia_aceito(candidato, fim_de_semana) or candidato + jitter <= agora_local:
         candidato += timedelta(days=1)
-    while not _dia_aceito(candidato, fim_de_semana):
-        candidato += timedelta(days=1)
-    return candidato
+    return candidato + jitter
 
 
 def parse_horario(texto: str) -> tuple[int, int] | None:
@@ -104,7 +122,9 @@ def parse_diaria(argumento: str) -> dict[str, object] | None:
     return mudancas
 
 
-def diaria_a_exibir(perfil: Profile, agora: datetime, fuso: ZoneInfo) -> datetime | None:
+def diaria_a_exibir(
+    perfil: Profile, agora: datetime, fuso: ZoneInfo, jitter: timedelta = timedelta(0)
+) -> datetime | None:
     """Quando a próxima revisão diária toca, no fuso da turma; `None` se está desligada. Usa o
     horário já agendado se ainda é futuro; senão calcula a partir de `agora`."""
     if not perfil.diaria_ligada:
@@ -116,16 +136,20 @@ def diaria_a_exibir(perfil: Profile, agora: datetime, fuso: ZoneInfo) -> datetim
         perfil.diaria_hora,
         perfil.diaria_minuto,
         perfil.diaria_fim_de_semana,
+        jitter,
     )
 
 
-def proxima_semanal(agora_local: datetime, dia: int, hora: int, minuto: int) -> datetime:
-    """O próximo `dia` da semana (0 = segunda) às `hora:minuto`, depois de `agora_local`."""
+def proxima_semanal(
+    agora_local: datetime, dia: int, hora: int, minuto: int, jitter: timedelta = timedelta(0)
+) -> datetime:
+    """O próximo `dia` da semana (0 = segunda) às `hora:minuto` (mais `jitter`), depois de
+    `agora_local`."""
     candidato = agora_local.replace(hour=hora, minute=minuto, second=0, microsecond=0)
     candidato += timedelta(days=(dia - candidato.weekday()) % 7)
-    if candidato <= agora_local:
+    if candidato + jitter <= agora_local:
         candidato += timedelta(days=7)
-    return candidato
+    return candidato + jitter
 
 
 def parse_semanal(argumento: str) -> dict[str, object] | None:
@@ -165,12 +189,18 @@ def parse_semanal(argumento: str) -> dict[str, object] | None:
     return mudancas
 
 
-def semanal_a_exibir(perfil: Profile, agora: datetime, fuso: ZoneInfo) -> datetime | None:
+def semanal_a_exibir(
+    perfil: Profile, agora: datetime, fuso: ZoneInfo, jitter: timedelta = timedelta(0)
+) -> datetime | None:
     """Quando o próximo desafio semanal toca, no fuso da turma; `None` se está desligado."""
     if not perfil.semanal_ligada:
         return None
     if perfil.proxima_semanal is not None and perfil.proxima_semanal > agora:
         return perfil.proxima_semanal.astimezone(fuso)
     return proxima_semanal(
-        agora.astimezone(fuso), perfil.semanal_dia, perfil.semanal_hora, perfil.semanal_minuto
+        agora.astimezone(fuso),
+        perfil.semanal_dia,
+        perfil.semanal_hora,
+        perfil.semanal_minuto,
+        jitter,
     )

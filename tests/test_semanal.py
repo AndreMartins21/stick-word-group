@@ -30,7 +30,7 @@ from app.services.fake_tts import FakeSintetizador
 from app.services.lembretes import Agendador
 from app.services.llm import LLMError, LLMTutor
 from app.services.storage import CacheAudioEmMemoria
-from tests.helpers import ANA, BIA, CAIO, DONO_NUMERO, GRUPO, T0, Montagem, montar
+from tests.helpers import ANA, BIA, CAIO, DONO_NUMERO, GRUPO, T0, Montagem, montar, sem_jitter
 
 BOT = "5531988887777"
 CARLA = Autor("5541900000001", "Carla")  # professora
@@ -377,6 +377,7 @@ def _agendador(m: Montagem) -> Agendador:
         agora=m.relogio.agora,
         fuso=ZoneInfo("America/Sao_Paulo"),
         dormir=dormir,
+        jitter_do_grupo=sem_jitter,
     )
 
 
@@ -474,8 +475,8 @@ async def test_weekly_configura_dia_hora_e_tamanho_so_para_admin() -> None:
     (invalida,) = await m.diz_no_grupo(DONO, "!weekly banana")
 
     assert recusa == messages.so_admin_configura("!", "weekly")
-    assert "every Monday at 09:30" in ok and "2 questions" in ok
-    assert "every Monday at 09:30" in ver and "Next one:" in ver
+    assert "every Monday around 09:30" in ok and "2 questions" in ok
+    assert "every Monday around 09:30" in ver and "Next one:" in ver
     assert invalida == messages.semanal_invalida("!")
     perfil = m.banco.do_espaco(GRUPO).obter_perfil()
     assert perfil is not None

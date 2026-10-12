@@ -12,7 +12,7 @@ import re
 from collections.abc import Iterable, Sequence
 from datetime import datetime
 
-from app.domain.agenda_grupo import NOMES_DOS_DIAS
+from app.domain.agenda_grupo import JITTER_MINUTOS, NOMES_DOS_DIAS
 from app.domain.lembretes import TAMANHO_REVISAO_PADRAO
 from app.domain.models import (
     AvaliacaoDaPergunta,
@@ -1022,7 +1022,8 @@ def diaria_estado(
     dias = "every day" if perfil.diaria_fim_de_semana else "every weekday"
     linhas = [
         abertura,
-        f"🕖 {dias} at {perfil.diaria_hora:02d}:{perfil.diaria_minuto:02d}",
+        f"🕖 {dias} around {perfil.diaria_hora:02d}:{perfil.diaria_minuto:02d} "
+        f"(may arrive up to {JITTER_MINUTOS} min earlier or later)",
         f"📚 {tamanho} words per review",
     ]
     if proximo is not None:
@@ -1128,7 +1129,8 @@ def semanal_estado(
     )
     linhas = [
         abertura,
-        f"🗓️ every {dia} at {perfil.semanal_hora:02d}:{perfil.semanal_minuto:02d}",
+        f"🗓️ every {dia} around {perfil.semanal_hora:02d}:{perfil.semanal_minuto:02d} "
+        f"(may arrive up to {JITTER_MINUTOS} min earlier or later)",
         f"❓ {tamanho}",
     ]
     if proximo is not None:

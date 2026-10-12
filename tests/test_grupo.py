@@ -22,6 +22,7 @@ from tests.helpers import (
     expansoes,
     explicacao_stall,
     montar,
+    sem_jitter,
 )
 from tests.test_flows import EXEMPLOS, SINONIMOS, _roteamento_frase
 
@@ -474,7 +475,7 @@ async def test_daily_sem_argumento_mostra_a_configuracao_a_qualquer_membro() -> 
 
     (resposta,) = await m.diz_no_grupo(ANA, "!daily")
 
-    assert "every weekday at 19:00" in resposta and "Next one:" in resposta
+    assert "every weekday around 19:00" in resposta and "Next one:" in resposta
     assert "5 words per review" in resposta
     _sem_comandos_do_privado([resposta])
 
@@ -486,7 +487,7 @@ async def test_daily_so_admin_do_bot_muda_e_aluno_recebe_a_recusa() -> None:
     (ok,) = await m.diz_no_grupo(BIA, "!daily 20:30 weekends on size 3")
 
     assert recusa == messages.so_admin_configura("!")
-    assert "Daily review updated" in ok and "every day at 20:30" in ok and "3 words" in ok
+    assert "Daily review updated" in ok and "every day around 20:30" in ok and "3 words" in ok
     perfil = m.banco.do_espaco(GRUPO).obter_perfil()
     assert perfil is not None
     assert (perfil.diaria_hora, perfil.diaria_minuto) == (20, 30)
@@ -503,7 +504,7 @@ async def test_daily_off_on_e_invalido() -> None:
 
     assert "It's off" in desligada
     assert invalida == messages.diaria_invalida("!")
-    assert "every weekday at 19:00" in ligada
+    assert "every weekday around 19:00" in ligada
     _sem_comandos_do_privado([desligada, invalida, ligada])
 
 
@@ -634,7 +635,7 @@ async def test_group_mostra_a_revisao_diaria_e_o_proximo_horario() -> None:
 
     (resposta,) = await m.diz_no_grupo(ANA, "!group")
 
-    assert "every weekday at 19:00" in resposta and "Next review" in resposta
+    assert "every weekday around 19:00" in resposta and "Next review" in resposta
 
 
 # --- limite de mensagens e privado ------------------------------------------------------------
@@ -702,6 +703,7 @@ def _agendador_do_grupo(m: Montagem, *, autorizado: bool = True):  # type: ignor
         fuso=ZoneInfo("UTC"),
         dormir=dormir,
         grupo_autorizado=lambda _grupo: autorizado,
+        jitter_do_grupo=sem_jitter,
     )
 
 

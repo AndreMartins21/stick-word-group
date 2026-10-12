@@ -19,7 +19,9 @@ from collections.abc import Awaitable, Callable
 from app import messages
 from app.channel.parser import numero_esta_na_lista
 from app.domain.agenda_grupo import (
+    JITTER_MINUTOS,
     diaria_a_exibir,
+    jitter_do_espaco,
     parse_diaria,
     parse_semanal,
     semanal_a_exibir,
@@ -309,7 +311,7 @@ async def _diaria(
     await d.conversa.enviar(
         messages.diaria_estado(
             perfil,
-            diaria_a_exibir(perfil, d.agora(), d.fuso),
+            diaria_a_exibir(perfil, d.agora(), d.fuso, jitter_do_espaco(d.chat_id, "diaria")),
             d.agora(),
             review.limite(d, perfil, len(entradas)),
             d.p,
@@ -346,7 +348,7 @@ async def _semanal(
     await d.conversa.enviar(
         messages.semanal_estado(
             perfil,
-            semanal_a_exibir(perfil, d.agora(), d.fuso),
+            semanal_a_exibir(perfil, d.agora(), d.fuso, jitter_do_espaco(d.chat_id, "semanal")),
             d.agora(),
             d.p,
             alterada=bool(argumento),
@@ -405,11 +407,16 @@ async def _perfil_do_grupo(d: Deps, perfil: Profile) -> None:
         lembretes = f"off — turn it on with {d.p}daily on"
     else:
         dias = "every day" if perfil.diaria_fim_de_semana else "every weekday"
-        lembretes = f"{dias} at {perfil.diaria_hora:02d}:{perfil.diaria_minuto:02d}"
-        proximo = diaria_a_exibir(perfil, d.agora(), d.fuso)
+        lembretes = (
+            f"{dias} around {perfil.diaria_hora:02d}:{perfil.diaria_minuto:02d} "
+            f"(up to {JITTER_MINUTOS} min earlier or later)"
+        )
+        proximo = diaria_a_exibir(perfil, d.agora(), d.fuso, jitter_do_espaco(d.chat_id, "diaria"))
         if proximo is not None:
             lembretes += f"\n⏭️ Next review: {messages._quando(proximo, d.agora())}"
-        proxima_semanal = semanal_a_exibir(perfil, d.agora(), d.fuso)
+        proxima_semanal = semanal_a_exibir(
+            perfil, d.agora(), d.fuso, jitter_do_espaco(d.chat_id, "semanal")
+        )
         if proxima_semanal is not None:
             lembretes += f"\n🏆 Weekly challenge: {messages._quando(proxima_semanal, d.agora())}"
 

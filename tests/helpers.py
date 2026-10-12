@@ -201,3 +201,8 @@ def eventos(caplog_records: Sequence[logging.LogRecord], nome: str | None = None
         if hasattr(r, "evento")
     ]
     return [a for a in achados if nome is None or a.evento == nome]
+
+
+def sem_jitter(_espaco_id: str, _tipo: str) -> timedelta:
+    """Fixa o deslocamento dos lembretes de grupo (M55) em zero, para testar o horário configurado."""
+    return timedelta(0)

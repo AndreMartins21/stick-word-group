@@ -261,8 +261,8 @@ deduplicação e do `sendSeen`). Mídia é ignorada, **exceto nota de voz que ci
 - `python -m sim --grupo`: uma linha `nome: mensagem` por participante; linhas sem prefixo aparecem
   como ignoradas.
 
-**Revisão diária do grupo (M35, ADR-0033; substitui o M17/ADR-0020).** Uma por dia, às 19h (fuso da
-turma), de segunda a sexta (`Profile.diaria_*`; `!daily 20h`, `!daily weekends on`, `!daily off`,
+**Revisão diária do grupo (M35, ADR-0033; substitui o M17/ADR-0020).** Uma por dia, por volta das 19h
+(fuso da turma; ±20 min, M55, ADR-0053), de segunda a sexta (`Profile.diaria_*`; `!daily 20h`, `!daily weekends on`, `!daily off`,
 `!daily size 3`). `!review` começa uma na hora. **Ninguém é marcado**: o card convida todo mundo, e
 qualquer participante responde com `!texto`, recebendo feedback da IA (`Tutor.review`). A **primeira
 resposta aceitável** (`qualidade != de_novo`) vale a nota (`srs.reagendar` no cartão do grupo) e o bot
@@ -280,7 +280,7 @@ mexer na nota; `!skipall` (`/skip-all`, `!0`, `!stop`) encerra com o resumo (`Sk
   (`Profile.revisoes_sem_resposta`); qualquer mensagem do grupo zera o contador.
 - `respostas/{auto}` registra `{entry, autor_id, marcado=false, qualidade}` de cada resposta.
 
-**Desafio semanal do grupo (M36, ADR-0034).** Uma vez por semana (padrão **sexta 13h**, fuso da turma;
+**Desafio semanal do grupo (M36, ADR-0034).** Uma vez por semana (padrão **sexta 13h**, fuso da turma; **Jitter (M55, ADR-0053):** a diária e o semanal de cada grupo saem de -20 a +20 min do horário configurado (deslocamento fixo por grupo, `jitter_do_espaco`: SHA-256 do tipo e do id), para os grupos não dispararem todos no mesmo minuto; `!daily`, `!weekly` e `!group` avisam "may arrive up to 20 min earlier or later".
 `!weekly mon 9h`, `!weekly size 3`, `!weekly off`; `!weekly now` começa na hora; ver: todos, mudar: admins
 do bot e o dono). O bot cria perguntas abertas **no nível da turma** com palavras do vocabulário do grupo
 (`Tutor.weekly_questions`, uma chamada; `escolher_vocabulario`: as da última semana primeiro, até 15) e
@@ -860,6 +860,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M52 | HMAC do webhook obrigatório em produção (seções 4/8.1): com `APP_ENV=prod` o `Settings` falha na subida sem `WAHA_HOOK_HMAC_KEY` (ADR-0050) | `make check` passa; prod sem a chave recusa subir, local segue opcional; o deploy sobe com a chave do Secret Manager |
 | M53 | Backup (seção 10.9): `infra/setup_backup.sh` cria a snapshot schedule diária do disco (7 dias) e liga o PITR do Firestore; `infra/setup_orcamento.sh` usa o número do projeto e a moeda da conta (ADR-0051) | `DRY_RUN=1 bash infra/setup_backup.sh` mostra os 3 comandos; rodando, `gcloud compute disks describe` lista a política e o Firestore mostra PITR habilitado |
 | M54 | `!delete` restrito (seção 5.2b, ADR-0052): `commands.apagar(pode_apagar=)`; no grupo só o autor da entrada (`Entry.autor_id`), admin do bot ou o dono apagam | `make check` passa; outro aluno recebe a recusa e a palavra fica; admin e dono apagam qualquer palavra; entrada sem autor só o admin apaga; o privado não muda |
+| M55 | Jitter nos lembretes do grupo (seção 5.2b/5.7, ADR-0053): `agenda_grupo.jitter_do_espaco` (-20 a +20 min, fixo por grupo e tipo), `proxima_diaria`/`proxima_semanal` com `jitter`, `Agendador(jitter_do_grupo=)`; `!daily`/`!weekly`/`!group` avisam a janela | `make check` passa; o próximo horário do grupo cai entre 18:40 e 19:20 para 19h e é sempre o mesmo para o mesmo grupo; o dia útil escolhido não muda; os textos dizem "around 19:00 (may arrive up to 20 min earlier or later)" |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 
