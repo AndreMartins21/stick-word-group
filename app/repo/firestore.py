@@ -15,6 +15,8 @@ Antes do M14 (multiusuário) `profile`, `session` e `entries` ficavam na raiz do
 
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
 from datetime import date, datetime
 from typing import Any
 
@@ -42,6 +44,10 @@ from app.repo.base import (
     proximo_tick,
     tipo_do_espaco,
 )
+
+VALIDADE_DO_CACHE_DE_ACESSO = 60.0  # segundos (M48, ADR-0046)
+TAMANHO_MAXIMO_DO_CACHE_DE_GRUPOS = 500
+TAMANHO_MAXIMO_DO_CACHE_DE_LIDS = 5000
 
 
 class FirestoreRepository:
@@ -172,8 +178,22 @@ class FirestoreRepository:
 
 
 class FirestoreBanco:
-    def __init__(self, client: firestore.Client) -> None:
+    def __init__(
+        self,
+        client: firestore.Client,
+        *,
+        relogio: Callable[[], float] = time.monotonic,
+        validade_do_cache: float = VALIDADE_DO_CACHE_DE_ACESSO,
+    ) -> None:
         self._db = client
+        # M48 (ADR-0046): a checagem de acesso (admin? grupo ativo?) roda a CADA mensagem, inclusive
+        # a conversa entre pessoas que o bot ignora. Cache curto em memória, invalidado pelas
+        # próprias mutações deste processo (um só); edição manual no console vale em ≤ 60 s.
+        self._relogio = relogio
+        self._validade = validade_do_cache
+        self._cache_admins: tuple[float, list[str]] | None = None
+        self._cache_grupos: dict[str, tuple[float, bool]] = {}
+        self._cache_lids: dict[str, str] = {}
 
     def do_espaco(self, espaco_id: str) -> Repository:
         documento = self._db.collection("espacos").document(espaco_id)
@@ -200,17 +220,28 @@ class FirestoreBanco:
         return True
 
     def obter_numero_do_lid(self, lid: str) -> str | None:
+        if lid in self._cache_lids:
+            return self._cache_lids[lid]
         dados = self._db.collection("lids").document(lid).get().to_dict()
-        return str(dados["numero"]) if dados else None
+        numero = str(dados["numero"]) if dados else None
+        if numero is not None and len(self._cache_lids) < TAMANHO_MAXIMO_DO_CACHE_DE_LIDS:
+            self._cache_lids[lid] = numero  # o LID de uma pessoa não muda: vale pelo processo
+        return numero
 
     def salvar_numero_do_lid(self, lid: str, numero: str) -> None:
         self._db.collection("lids").document(lid).set({"numero": numero})
+        self._cache_lids.pop(lid, None)
 
     # --- Controle de acesso (M15, ADR-0018) -----------------------------------------------------
 
     def listar_admins(self) -> list[str]:
+        agora = self._relogio()
+        if self._cache_admins is not None and agora - self._cache_admins[0] < self._validade:
+            return list(self._cache_admins[1])
         documentos = self._db.collection("admins").order_by("adicionado_em").stream()
-        return [d.id for d in documentos]
+        admins = [d.id for d in documentos]
+        self._cache_admins = (agora, admins)
+        return list(admins)
 
     def adicionar_admin(self, numero: str, *, por: str, agora: datetime) -> bool:
         try:
@@ -219,6 +250,7 @@ class FirestoreBanco:
             )
         except AlreadyExists:
             return False
+        self._cache_admins = None
         return True
 
     def remover_admin(self, numero: str) -> bool:
@@ -226,13 +258,33 @@ class FirestoreBanco:
         if not documento.get().exists:
             return False
         documento.delete()
+        self._cache_admins = None
         return True
 
-    def grupo_esta_ativo(self, grupo_id: str) -> bool:
+    def _ler_grupo_ativo(self, grupo_id: str) -> bool:
         dados = self._db.collection("espacos").document(grupo_id).get().to_dict()
         return bool(dados and dados.get("ativo"))
 
+    def grupo_esta_ativo(self, grupo_id: str) -> bool:
+        agora = self._relogio()
+        em_cache = self._cache_grupos.get(grupo_id)
+        if em_cache is not None and agora - em_cache[0] < self._validade:
+            return em_cache[1]
+        ativo = self._ler_grupo_ativo(grupo_id)
+        if len(self._cache_grupos) >= TAMANHO_MAXIMO_DO_CACHE_DE_GRUPOS:
+            self._cache_grupos.clear()  # grupos desconhecidos não crescem o mapa sem limite
+        self._cache_grupos[grupo_id] = (agora, ativo)
+        return ativo
+
     def ativar_grupo(self, grupo_id: str, *, nome: str | None, por: str, agora: datetime) -> None:
+        try:
+            self._gravar_ativacao(grupo_id, nome=nome, por=por, agora=agora)
+        finally:
+            self._cache_grupos.pop(grupo_id, None)  # depois da escrita: nada re-cacheia o antigo
+
+    def _gravar_ativacao(
+        self, grupo_id: str, *, nome: str | None, por: str, agora: datetime
+    ) -> None:
         self._db.collection("espacos").document(grupo_id).set(
             {
                 "tipo": "grupo",
@@ -253,12 +305,15 @@ class FirestoreBanco:
             )
 
     def desativar_grupo(self, grupo_id: str) -> bool:
-        if not self.grupo_esta_ativo(grupo_id):
-            return False
-        self._db.collection("espacos").document(grupo_id).set(
-            {"ativo": False, "proximo_tick": firestore.DELETE_FIELD}, merge=True
-        )
-        return True
+        try:
+            if not self._ler_grupo_ativo(grupo_id):
+                return False
+            self._db.collection("espacos").document(grupo_id).set(
+                {"ativo": False, "proximo_tick": firestore.DELETE_FIELD}, merge=True
+            )
+            return True
+        finally:
+            self._cache_grupos.pop(grupo_id, None)
 
     def listar_grupos_ativos(self) -> list[GrupoAtivo]:
         consulta = self._db.collection("espacos").where(filter=FieldFilter("ativo", "==", True))

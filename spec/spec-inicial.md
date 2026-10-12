@@ -665,7 +665,7 @@ Desde o M14 (ADR-0017) tudo abaixo de `profile/me` até `entries/{slug}/sentence
 **espaço**, `espacos/{espaco_id}/...`, com `espaco_id` o chat id (`NUMERO@c.us` no privado). O
 documento `espacos/{espaco_id}` guarda `{tipo:"privado"|"grupo", criado_em, proximo_tick?}`, em que
 `proximo_tick` espelha o perfil para o agendador achar os lembretes vencidos com uma consulta só.
-`processed/` e `lids/` continuam globais, assim como `uso/{AAAA-MM-DD}` (`{usd}`: custo estimado de IA do dia, incrementado em lote, M46, ADR-0044). Os caminhos abaixo são relativos ao espaço.
+`processed/` e `lids/` continuam globais (M48, ADR-0046: o `FirestoreBanco` guarda em memória, por 60 s, a lista de admins e o estado ativo de cada grupo — invalidados pelas mutações — e o LID já resolvido), assim como `uso/{AAAA-MM-DD}` (`{usd}`: custo estimado de IA do dia, incrementado em lote, M46, ADR-0044). Os caminhos abaixo são relativos ao espaço.
 ```
 profile/me                 { nivel, criado_em, nome?,
                              lembretes_por_dia, janela_inicio, janela_fim, chat_id?,
@@ -851,6 +851,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M45 | Tokens e custo no log (seções 12/10.8): `services/custo.py`, `llm_chamada` com `tokens_entrada`/`tokens_saida`/`tokens_thinking`/`custo_usd`, novo evento `transcricao_chamada`, `infra/setup_orcamento.sh` (Budget com alertas 50/90/100%) (ADR-0043) | `make check` passa; o uso de todas as tentativas é somado numa linha `llm_chamada`; transcrição registra tokens de áudio e custo; resposta sem `usage_metadata` vale zero; script passa em `bash -n` e shellcheck |
 | M46 | Orçamento diário de IA (seções 4/5.6/7.1/12): `Orcamento` soma o `custo_usd` das chamadas por dia no fuso do aluno, `Banco.obter_uso_do_dia`/`somar_uso_do_dia` (`uso/{dia}`), pausa a IA e os lembretes ao atingir `ORCAMENTO_DIARIO_USD`, avisa o dono uma vez (ADR-0044) | `make check` passa; ao esgotar, cada chat recebe um aviso e a IA não é chamada; o dono segue atendido; o agendador não dispara lembretes e avisa o dono uma vez; o dia vira no fuso do aluno; um restart continua do gasto gravado |
 | M47 | Fila limitada (seção 5.6, ADR-0045): `MAX_FILA_POR_CHAT` (3) e `MAX_PROCESSAMENTOS` (4) no `Router`, evento `fila_cheia` (ADR-0045) | `make check` passa; com o chat já com 3 mensagens esperando, as seguintes são descartadas em silêncio e registradas; chats diferentes não dividem a fila; no máximo 4 chats processam ao mesmo tempo, sem perder mensagens; o contador volta a zero mesmo com erro |
+| M48 | Cache de acesso (seção 7.1, ADR-0046): `FirestoreBanco` com validade de 60 s para `listar_admins` e `grupo_esta_ativo` (invalidados pelas mutações) e cache permanente do LID resolvido (ADR-0046) | `make check` passa; 5 chamadas seguidas leem o Firestore uma vez; adicionar/remover admin e ativar/desativar grupo invalidam; o LID resolvido não é lido de novo e o desconhecido não é cacheado |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 
