@@ -18,12 +18,12 @@ jobs:
     name: Lint, formatação, tipagem e segredos
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0  # gitleaks precisa do histórico
 
       - name: Instalar uv
-        uses: astral-sh/setup-uv@v10.1.0
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           enable-cache: true
 
@@ -37,10 +37,10 @@ jobs:
     name: Testes (pytest)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Instalar uv
-        uses: astral-sh/setup-uv@v10.1.0
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           enable-cache: true
 
@@ -54,7 +54,7 @@ jobs:
     name: Validar docker compose
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # O compose só existe a partir do M7; até lá o job passa sem fazer nada.
       - name: docker compose config
@@ -74,20 +74,20 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # Workload Identity Federation (ADR-0013): sem chave de conta de serviço em arquivo. O
       # provider só troca o token por credencial se assertion.repository + assertion.ref baterem
       # (ver infra/setup_cicd.sh) — um fork ou outra branch nunca conseguem autenticar.
       - name: Autenticar na GCP
-        uses: google-github-actions/auth@v3.0.0
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
           project_id: ${{ vars.GCP_PROJECT_ID }}
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: vocabot-deploy@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
 
       - name: Instalar gcloud
-        uses: google-github-actions/setup-gcloud@v3.0.1
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
 
       - name: Deploy (empacota, copia via IAP, sobe o compose na VM)
         env:

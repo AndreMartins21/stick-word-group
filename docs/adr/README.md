@@ -58,6 +58,7 @@ operacional: numeração, status e o índice.
 | [0046](0046-cache-curto-das-checagens-de-acesso.md) | Cache curto em memória das checagens de acesso do Firestore (admin, grupo ativo, LID) | Aceito | 2026-10-12 |
 | [0047](0047-orcamento-de-5-dolares-e-limites-no-deploy.md) | Orçamento diário padrão de US$ 5 e limites de uso renderizados pelo deploy | Aceito | 2026-10-12 |
 | [0048](0048-teto-mensal-e-cota-diaria-por-grupo.md) | Teto mensal de IA e cota diária por grupo, com o custo atribuído ao espaço | Aceito | 2026-10-12 |
+| [0049](0049-actions-fixadas-por-sha.md) | GitHub Actions fixadas pelo SHA do commit | Aceito | 2026-10-12 |
 
 ## Quando escrever um
 
