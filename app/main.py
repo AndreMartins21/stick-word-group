@@ -189,6 +189,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         max_caracteres=settings.max_caracteres,
         limites=settings.limites,
         orcamento=orcamento,
+        max_fila_por_chat=settings.max_fila_por_chat,
+        max_processamentos=settings.max_processamentos,
         eh_dono=settings.eh_dono,
         eh_admin=lambda numero: admin.eh_admin(_acesso(settings, canal, banco), numero),
         config_grupo=ConfigGrupo(

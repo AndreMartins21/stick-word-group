@@ -32,6 +32,8 @@ _NUMERICOS = {
     "limite_grupo_dia",
     "limite_audio_segundos_dia",
     "orcamento_diario_usd",
+    "max_fila_por_chat",
+    "max_processamentos",
 }
 
 
@@ -74,6 +76,9 @@ class Settings(BaseSettings):
     # Orçamento diário de IA (M46, ADR-0044): ao somar este custo estimado (USD) no dia, o bot
     # pausa a IA até o dia seguinte e avisa o dono. Ajuste para ~3x o gasto médio diário esperado.
     orcamento_diario_usd: float = Field(default=10.0, gt=0)
+    # Fila (M47, ADR-0045): mensagens esperando a vez por chat e chats processando ao mesmo tempo.
+    max_fila_por_chat: int = Field(default=3, ge=1)
+    max_processamentos: int = Field(default=4, ge=1)
     bot_number: str
     user_level: NivelUsuario = "B1-B2"
     # Fuso do aluno, para distribuir os lembretes de revisão espaçada (seção 5.7, M10).

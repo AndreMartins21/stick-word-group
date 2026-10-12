@@ -49,6 +49,10 @@ from app.services.orcamento import Orcamento
 logger = logging.getLogger(__name__)
 
 MAX_CARACTERES_PADRAO = 500  # M40, ADR-0038
+# M47 (ADR-0045): mensagens de um chat esperando a vez (a trava serializa o chat) e chats
+# processando ao mesmo tempo (as threads do pool são poucas na e2-micro e também servem o Firestore).
+MAX_FILA_POR_CHAT_PADRAO = 3
+MAX_PROCESSAMENTOS_PADRAO = 4
 
 
 class Router:
@@ -69,6 +73,8 @@ class Router:
         max_caracteres: int = MAX_CARACTERES_PADRAO,
         limites: Limites | None = None,
         orcamento: Orcamento | None = None,
+        max_fila_por_chat: int = MAX_FILA_POR_CHAT_PADRAO,
+        max_processamentos: int = MAX_PROCESSAMENTOS_PADRAO,
         eh_dono: Callable[[str], bool] = lambda _numero: False,
         eh_admin: Callable[[str], bool] | None = None,
         config_grupo: ConfigGrupo | None = None,
@@ -88,6 +94,10 @@ class Router:
         # M46 (ADR-0044): esgotado o orçamento diário de IA, nada chega ao modelo até amanhã.
         self._orcamento = orcamento
         self._pausa_avisada: dict[str, date] = {}  # chat -> dia (fuso) em que já foi avisado
+        # M47 (ADR-0045): fila por chat com teto e vagas de processamento globais.
+        self._max_fila_por_chat = max_fila_por_chat
+        self._na_fila: dict[str, int] = {}
+        self._vagas = asyncio.Semaphore(max_processamentos)
         self._eh_dono = eh_dono
         self._eh_admin = eh_admin
         self._config_grupo = config_grupo or ConfigGrupo()
@@ -206,9 +216,27 @@ class Router:
         nem outra é conversa entre pessoas e nada acontece."""
         if not admitida and not self._eh_para_o_bot(texto, chat_id, autor, marcado):
             return
+        if self._na_fila.get(chat_id, 0) >= self._max_fila_por_chat:
+            # Um flood não vira uma fila de tarefas gastando IA depois do ataque: descarta em
+            # silêncio (responder também é carga) e só registra.
+            registrar_evento(logger, "fila_cheia", espaco=id_curto(chat_id))
+            return
         if not admitida and not await self.admitir(chat_id, autor):
             return
-        async with self._trava(chat_id):
+        self._na_fila[chat_id] = self._na_fila.get(chat_id, 0) + 1
+        try:
+            await self._processar_na_vez(texto, chat_id, autor, marcado)
+        finally:
+            restantes = self._na_fila[chat_id] - 1
+            if restantes > 0:
+                self._na_fila[chat_id] = restantes
+            else:
+                del self._na_fila[chat_id]
+
+    async def _processar_na_vez(
+        self, texto: str, chat_id: str, autor: Autor | None, marcado: bool
+    ) -> None:
+        async with self._trava(chat_id), self._vagas:
             d = self._deps(chat_id, autor)
             de_grupo: tuple[Autor, str, bool] | None = None
             if d.em_grupo:
@@ -380,7 +408,7 @@ class Router:
         não responde a uma. Mesma trava do resto (não pode correr junto de uma mensagem
         chegando). Nunca dispara sem um destino real já aprendido, e nunca interrompe uma
         conversa em andamento — quem decide isso é o próprio agendador, antes de chamar."""
-        async with self._trava(chat_id):
+        async with self._trava(chat_id), self._vagas:
             d = self._deps(chat_id)
             perfil = await bloq(self._perfil, d)
             d = self._com_idioma(d, perfil)
@@ -395,7 +423,7 @@ class Router:
     async def iniciar_semanal(self, chat_id: str) -> None:
         """Chamado pelo agendador (M36): o bot inicia o desafio semanal do grupo. Mesma trava do
         resto; nunca interrompe uma atividade em andamento (sessão não expirada)."""
-        async with self._trava(chat_id):
+        async with self._trava(chat_id), self._vagas:
             d = self._deps(chat_id)
             perfil = await bloq(self._perfil, d)
             d = self._com_idioma(d, perfil)

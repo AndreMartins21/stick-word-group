@@ -83,6 +83,7 @@ A VM tem só 1 GB de RAM. Crie um **swap de 2 GB**, limite a memória dos contai
 | `LIMITE_PESSOA_MINUTO` / `LIMITE_PESSOA_DIA` / `LIMITE_GRUPO_DIA` / `LIMITE_AUDIO_SEGUNDOS_DIA` | `.env.infra` (opcionais) | Padrão `6` / `150` / `400` / `600` (M43, ADR-0041): mensagens por pessoa por minuto e por dia, mensagens por grupo por dia e segundos de áudio por pessoa por dia; o dono não é limitado |
 | `GEMINI_THINKING_LEVEL` | `.env.infra` (opcional) | Padrão `minimal` (M44, ADR-0042): `thinking_level` do Gemini 3.x (cobrado como saída); vazio usa o padrão do modelo; se o modelo recusar, o bot segue sem ele |
 | `ORCAMENTO_DIARIO_USD` | `.env.infra` (opcional) | Padrão `10` (M46, ADR-0044): ao somar este custo estimado de IA no dia (fuso do aluno), o bot pausa a IA e os lembretes até o dia seguinte e avisa o dono uma vez; o dono segue atendido |
+| `MAX_FILA_POR_CHAT` / `MAX_PROCESSAMENTOS` | `.env.infra` (opcionais) | Padrão `3` / `4` (M47, ADR-0045): mensagens de um chat esperando a vez (as demais são descartadas em silêncio) e chats processando ao mesmo tempo |
 | `CONTACT_EMAIL` | `.env.infra` (opcional) | E-mail que o aviso "você não tem um plano" mostra a quem não está na lista (M15) |
 | `BOT_NUMBER` | `.env.infra` | Número Vivo do bot, só dígitos (informativo/logs) |
 | `WAHA_URL` | compose | `http://waha:3000` |
@@ -413,6 +414,7 @@ Send me another word or expression whenever you want.
 - **Nunca** envie mensagem para um número fora da allowlist (`ALLOWED_NUMBER`/`ALLOWED_NUMBERS`, seção 8.2): só ao chat de quem escreveu.
 - Nunca mande mais de 3 mensagens seguidas sem uma resposta do usuário (o limite vale por espaço, M14).
 - **Limite de uso (M43, ADR-0041):** por pessoa 6/min e 150/dia, por grupo 400/dia, 600 s de áudio/dia por pessoa, em memória (janela deslizante). A primeira recusa avisa uma vez, o resto fica em silêncio; conversa entre pessoas no grupo não conta; o dono não é limitado.
+- **Fila (M47, ADR-0045):** no máximo 3 mensagens por chat esperando a vez (as demais são descartadas em silêncio, evento `fila_cheia`) e 4 chats processando ao mesmo tempo.
 - **Orçamento diário de IA (M46, ADR-0044):** esgotado o `ORCAMENTO_DIARIO_USD`, nenhuma mensagem chega à IA (um aviso por chat por dia), o agendador não dispara lembretes e o dono recebe uma DM; o dono continua atendido.
 - **Texto acima de `MAX_CARACTERES` (500) é recusado** (M40, ADR-0038) com um aviso curto, antes do banco e da IA; no grupo só vale para o que o bot lê (marcação, citação, comando).
 - **A IA nunca é chamada para quem não tem plano** (M15): número fora da lista só recebe o aviso "você
@@ -848,6 +850,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M44 | Teto de saída e raciocínio (seções 4/6): `max_output_tokens` (2.048 nas tarefas, 1.024 na transcrição) e `GEMINI_THINKING_LEVEL` (padrão `minimal`), recuo automático se o modelo recusar (ADR-0042) | `make check` passa; o config enviado ao Gemini tem teto e `thinking_config`; um 400 do modelo refaz a chamada sem o nível, uma vez por processo, sem virar `LLMError`; vazio no env usa o padrão do modelo |
 | M45 | Tokens e custo no log (seções 12/10.8): `services/custo.py`, `llm_chamada` com `tokens_entrada`/`tokens_saida`/`tokens_thinking`/`custo_usd`, novo evento `transcricao_chamada`, `infra/setup_orcamento.sh` (Budget com alertas 50/90/100%) (ADR-0043) | `make check` passa; o uso de todas as tentativas é somado numa linha `llm_chamada`; transcrição registra tokens de áudio e custo; resposta sem `usage_metadata` vale zero; script passa em `bash -n` e shellcheck |
 | M46 | Orçamento diário de IA (seções 4/5.6/7.1/12): `Orcamento` soma o `custo_usd` das chamadas por dia no fuso do aluno, `Banco.obter_uso_do_dia`/`somar_uso_do_dia` (`uso/{dia}`), pausa a IA e os lembretes ao atingir `ORCAMENTO_DIARIO_USD`, avisa o dono uma vez (ADR-0044) | `make check` passa; ao esgotar, cada chat recebe um aviso e a IA não é chamada; o dono segue atendido; o agendador não dispara lembretes e avisa o dono uma vez; o dia vira no fuso do aluno; um restart continua do gasto gravado |
+| M47 | Fila limitada (seção 5.6, ADR-0045): `MAX_FILA_POR_CHAT` (3) e `MAX_PROCESSAMENTOS` (4) no `Router`, evento `fila_cheia` (ADR-0045) | `make check` passa; com o chat já com 3 mensagens esperando, as seguintes são descartadas em silêncio e registradas; chats diferentes não dividem a fila; no máximo 4 chats processam ao mesmo tempo, sem perder mensagens; o contador volta a zero mesmo com erro |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 
@@ -1025,6 +1028,7 @@ Catálogo de eventos:
 | `numero_sem_plano` | `main.py:_avisar_sem_plano` | — | demanda reprimida |
 | `pausa_de_orcamento` | `Router._avisar_pausa` (M46) | `espaco` | mensagens recusadas por orçamento esgotado |
 | `orcamento_esgotado` | `services/orcamento.py:avisar_esgotado` (M46) | `n` (centavos gastos), `total` (limite em centavos) | dia em que o disjuntor disparou |
+| `fila_cheia` | `Router.processar` (M47) | `espaco` | flood ou fila por chat apertada |
 | `limite_atingido` | `Router.admitir` (M43) | `espaco`, `tipo_espaco`, `motivo` (`minuto`\|`dia`\|`grupo`\|`audio`), `avisou` | abuso e flood, limites apertados demais |
 | `audio_recusado` | `main.py:_transcrever` (M41) | `motivo` (`duracao_ou_tamanho_declarado`\|`tamanho_baixado`) | áudio acima do teto |
 | `waha_status` | `main.py:_tratar_status_sessao` | `ok`, `motivo` (o status) | disponibilidade do WhatsApp |
