@@ -51,6 +51,7 @@ operacional: numeração, status e o índice.
 | [0039](0039-limite-de-duracao-e-de-bytes-do-audio.md) | Áudio recusado pela duração declarada, antes de baixar, e download em streaming com teto de bytes | Aceito | 2026-10-12 |
 | [0040](0040-waha-so-baixa-audio.md) | WAHA baixa só áudio: filtro de mimetype por prefixo e vida curta dos arquivos | Aceito | 2026-10-12 |
 | [0041](0041-limite-de-uso-por-pessoa-e-por-grupo.md) | Limite de uso por pessoa e por grupo, em memória, com aviso único | Aceito | 2026-10-12 |
+| [0042](0042-teto-de-saida-e-nivel-de-raciocinio-do-gemini.md) | Teto de tokens de saída e nível de raciocínio mínimo no Gemini, com recuo automático | Aceito | 2026-10-12 |
 
 ## Quando escrever um
 

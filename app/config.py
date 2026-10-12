@@ -92,6 +92,10 @@ class Settings(BaseSettings):
     gemini_model_eval: str | None = None
     # M39 (ADR-0037): modelo da transcrição de áudio; vazio usa o `gemini_model`.
     gemini_model_audio: str | None = None
+    # M44 (ADR-0042): nível de raciocínio ("thinking") do Gemini 3.x, que é cobrado como saída.
+    # `minimal` | `low` | `medium` | `high`; vazio deixa o padrão do modelo. Se o modelo recusar o
+    # nível, o bot segue sem ele (e registra um aviso).
+    gemini_thinking_level: Literal["minimal", "low", "medium", "high"] | None = "minimal"
     anthropic_api_key: SecretStr | None = None
     anthropic_model: str = "claude-haiku-4-5-20251001"
 
@@ -116,6 +120,7 @@ class Settings(BaseSettings):
         "gemini_model",
         "gemini_model_eval",
         "gemini_model_audio",
+        "gemini_thinking_level",
         "owner_number",
         "audio_bucket",
         "metrics_bucket",

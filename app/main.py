@@ -145,6 +145,7 @@ def _criar_transcritor(settings: Settings) -> Transcritor | None:
         projeto=settings.gcp_project_id,
         localizacao=settings.vertex_location,
         modelo=modelo,
+        thinking_level=settings.gemini_thinking_level,
     )
 
 

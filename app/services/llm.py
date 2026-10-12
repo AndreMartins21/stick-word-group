@@ -49,6 +49,9 @@ TEMPERATURA_PRECISA = 0.2  # explicar e avaliar: queremos consistência
 TEMPERATURA_CRIATIVA = 0.3  # exemplos e expansões: um pouco de variedade
 MAX_TENTATIVAS = 2  # a original + 1 nova tentativa (seção 6)
 _MAX_TOKENS_ANTHROPIC = 2048
+# M44 (ADR-0042): teto de saída (inclui o "thinking" nos modelos 3.x). As maiores respostas do bot
+# (10 perguntas do desafio semanal, 4 sentidos com exemplos) cabem folgadas em 2.048 tokens.
+MAX_TOKENS_DE_SAIDA = 2048
 _NOME_DA_FERRAMENTA = "responder"
 
 # Vertex AI responde 429 (RESOURCE_EXHAUSTED) quando a capacidade compartilhada do modelo aperta,
@@ -152,8 +155,11 @@ class Tutor(Protocol):
 class VertexGeminiProvider:
     """`google-genai` no Vertex AI: autenticação pela conta de serviço da VM, sem chave."""
 
-    def __init__(self, client: Any) -> None:  # genai.Client, ou um dublê nos testes
+    def __init__(
+        self, client: Any, *, thinking_level: str | None = None
+    ) -> None:  # genai.Client, ou um dublê nos testes
         self._client = client
+        self._thinking_level = thinking_level
 
     def gerar(
         self,
@@ -164,19 +170,8 @@ class VertexGeminiProvider:
         modelo: str,
         temperatura: float,
     ) -> str:
-        config = types.GenerateContentConfig(
-            system_instruction=sistema,
-            temperature=temperatura,
-            response_mime_type="application/json",
-            response_schema=schema,
-            # Não usamos ferramentas; sem isto o SDK entra no caminho de "function calling
-            # automático" e avisa que ele não é recomendado em generate_content.
-            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-        )
         try:
-            resposta = self._client.models.generate_content(
-                model=modelo, contents=usuario, config=config
-            )
+            resposta = self._chamar(modelo, usuario, sistema, schema, temperatura)
         except genai_errors.APIError as erro:
             # Só o código e o status: o corpo da resposta não vai para o log nem para a mensagem.
             raise LLMError(f"o Gemini recusou a chamada ({erro.code} {erro.status})") from erro
@@ -186,6 +181,50 @@ class VertexGeminiProvider:
         if not texto:
             raise LLMError("o Gemini não devolveu texto (resposta vazia ou bloqueada)")
         return texto
+
+    def _config(
+        self, sistema: str, schema: type[BaseModel], temperatura: float
+    ) -> types.GenerateContentConfig:
+        return types.GenerateContentConfig(
+            system_instruction=sistema,
+            temperature=temperatura,
+            response_mime_type="application/json",
+            response_schema=schema,
+            max_output_tokens=MAX_TOKENS_DE_SAIDA,
+            thinking_config=nivel_de_raciocinio(self._thinking_level),
+            # Não usamos ferramentas; sem isto o SDK entra no caminho de "function calling
+            # automático" e avisa que ele não é recomendado em generate_content.
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+        )
+
+    def _chamar(
+        self, modelo: str, usuario: str, sistema: str, schema: type[BaseModel], temperatura: float
+    ) -> Any:
+        config = self._config(sistema, schema, temperatura)
+        try:
+            return self._client.models.generate_content(
+                model=modelo, contents=usuario, config=config
+            )
+        except genai_errors.ClientError as erro:
+            if self._thinking_level is None or erro.code != 400:
+                raise
+            # O modelo recusou o nível de raciocínio (cada modelo 3.x aceita um conjunto): desliga o
+            # ajuste neste processo e refaz a chamada, para a IA nunca cair por causa dele.
+            logger.warning(
+                "o modelo recusou thinking_level=%s; seguindo com o padrão do modelo",
+                self._thinking_level,
+            )
+            self._thinking_level = None
+            return self._client.models.generate_content(
+                model=modelo, contents=usuario, config=self._config(sistema, schema, temperatura)
+            )
+
+
+def nivel_de_raciocinio(nivel: str | None) -> types.ThinkingConfig | None:
+    """`minimal`/`low`/`medium`/`high` (M44, ADR-0042) ou `None` para o padrão do modelo."""
+    if not nivel:
+        return None
+    return types.ThinkingConfig(thinking_level=types.ThinkingLevel(nivel.upper()))
 
 
 class AnthropicProvider:
@@ -506,8 +545,13 @@ def criar_cliente_vertex(*, projeto: str, localizacao: str) -> genai.Client:
     )
 
 
-def criar_provider_vertex(*, projeto: str, localizacao: str) -> VertexGeminiProvider:
-    return VertexGeminiProvider(criar_cliente_vertex(projeto=projeto, localizacao=localizacao))
+def criar_provider_vertex(
+    *, projeto: str, localizacao: str, thinking_level: str | None = None
+) -> VertexGeminiProvider:
+    return VertexGeminiProvider(
+        criar_cliente_vertex(projeto=projeto, localizacao=localizacao),
+        thinking_level=thinking_level,
+    )
 
 
 def criar_provider_anthropic(*, api_key: str) -> AnthropicProvider:
@@ -533,7 +577,9 @@ def criar_tutor(settings: Settings) -> LLMTutor:
     if not settings.gemini_model:
         raise LLMError("LLM_PROVIDER=vertex_gemini exige GEMINI_MODEL")
     provider = criar_provider_vertex(
-        projeto=settings.gcp_project_id, localizacao=settings.vertex_location
+        projeto=settings.gcp_project_id,
+        localizacao=settings.vertex_location,
+        thinking_level=settings.gemini_thinking_level,
     )
     return LLMTutor(
         provider,
