@@ -69,7 +69,7 @@ A VM tem só 1 GB de RAM. Crie um **swap de 2 GB**, limite a memória dos contai
 | `ANTHROPIC_API_KEY` | Secret Manager (opcional) | Só se `LLM_PROVIDER=anthropic` |
 | `WAHA_API_KEY` | Secret Manager (gerado) | Chave que o bot usa para chamar o WAHA; o WAHA exige essa chave |
 | `WAHA_DASHBOARD_PASSWORD` | Secret Manager (gerado) | Senha do painel/Swagger do WAHA (usuário `admin`) |
-| `WAHA_HOOK_HMAC_KEY` | Secret Manager (gerado) | Chave da assinatura HMAC dos webhooks (seção 8.1); opcional para o bot |
+| `WAHA_HOOK_HMAC_KEY` | Secret Manager (gerado) | Chave da assinatura HMAC dos webhooks (seção 8.1); obrigatória com `APP_ENV=prod` (M52, ADR-0050) |
 | `ALLOWED_NUMBER` | `.env.infra` | Número **pessoal** do usuário, só dígitos (ex.: `5531999998888`). Desde o M14 (ADR-0017) entra na lista de números permitidos, e é o dono do bot por padrão |
 | `ALLOWED_NUMBERS` | `.env.infra` (opcional) | Lista de números permitidos separados por vírgula, mesma comparação do nono dígito (seção 8.2). Cada número é um aluno, com o próprio caderno |
 | `ALLOWED_GROUPS` | `.env.infra` (opcional) | Lista de ids `@g.us` de grupos autorizados (o id de um grupo novo aparece uma vez no log) |
@@ -857,6 +857,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M49 | Orçamento de US$ 5 e limites no deploy (seções 4/10.9): padrão `ORCAMENTO_DIARIO_USD=5`; `deploy.sh` e `ci.yml` levam os limites do M40-M48 e `GEMINI_THINKING_LEVEL` ao `.env` da VM (ADR-0047) | `make check` passa; `.env` renderizado traz as variáveis com os padrões; vazio na GitHub Variable usa o padrão; sem a variável, o orçamento diário é US$ 5 |
 | M50 | Teto mensal e cota por grupo (seções 4/5.2b/7.1/12): `Orcamento` com `ORCAMENTO_MENSAL_USD` (50) e `COTA_DIARIA_POR_GRUPO_USD` (1), custo atribuído ao espaço por `custo.no_espaco`, `uso/{dia}.espacos`, `Banco.obter_uso_por_espaco_do_dia` (ADR-0048) | `make check` passa; o mês soma os dias e pausa a IA até virar; o grupo que estoura a cota é pausado sozinho (um aviso ao grupo, uma DM ao dono, sem lembretes) e os demais seguem; restart não reenvia avisos; o custo da transcrição conta no grupo |
 | M51 | Actions por SHA (seção 10.9, CI): toda `uses:` dos workflows fixada no SHA do commit, com a tag em comentário (ADR-0049) | `make check` passa; `tests/test_actions_por_sha.py` reprova `uses:` remoto sem SHA de 40 caracteres; o deploy segue verde |
+| M52 | HMAC do webhook obrigatório em produção (seções 4/8.1): com `APP_ENV=prod` o `Settings` falha na subida sem `WAHA_HOOK_HMAC_KEY` (ADR-0050) | `make check` passa; prod sem a chave recusa subir, local segue opcional; o deploy sobe com a chave do Secret Manager |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 

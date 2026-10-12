@@ -95,8 +95,8 @@ class Settings(BaseSettings):
     waha_session: str = "default"
     waha_api_key: SecretStr
     # Assinatura HMAC dos webhooks (seção 8.1: "se o WAHA suportar, configure e valide" — a
-    # doc atual confirma suporte via WHATSAPP_HOOK_HMAC_KEY). Opcional: sem ela, confiamos na
-    # rede interna isolada do compose, como a spec permite como alternativa.
+    # doc atual confirma suporte via WHATSAPP_HOOK_HMAC_KEY). Opcional só fora de produção: com
+    # `APP_ENV=prod` o bot recusa subir sem ela (M52, ADR-0050).
     waha_hook_hmac_key: SecretStr | None = None
 
     # IA
@@ -190,6 +190,14 @@ class Settings(BaseSettings):
     def _ao_menos_um_numero(self) -> Self:
         if not self.numeros_permitidos:
             raise ValueError("defina ALLOWED_NUMBERS (ou ALLOWED_NUMBER) com ao menos um número")
+        return self
+
+    @model_validator(mode="after")
+    def _hmac_obrigatorio_em_producao(self) -> Self:
+        if self.app_env == "prod" and self.waha_hook_hmac_key is None:
+            raise ValueError(
+                "WAHA_HOOK_HMAC_KEY é obrigatório com APP_ENV=prod (assinatura do webhook)"
+            )
         return self
 
     @property

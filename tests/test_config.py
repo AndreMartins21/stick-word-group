@@ -369,3 +369,30 @@ def test_metrics_bucket_configurado(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = Settings(_env_file=None)
 
     assert settings.metrics_bucket == "proj-vocabot-metrics"
+
+
+def test_prod_exige_a_chave_hmac_do_webhook(monkeypatch: pytest.MonkeyPatch) -> None:
+    """M52 (ADR-0050): sem assinatura o webhook aceitaria qualquer um que alcance o bot."""
+    _com_env(monkeypatch, APP_ENV="prod")
+
+    with pytest.raises(ValidationError, match="WAHA_HOOK_HMAC_KEY"):
+        Settings(_env_file=None)
+
+
+def test_prod_com_chave_vazia_tambem_recusa(monkeypatch: pytest.MonkeyPatch) -> None:
+    _com_env(monkeypatch, APP_ENV="prod", WAHA_HOOK_HMAC_KEY="  ")
+
+    with pytest.raises(ValidationError, match="WAHA_HOOK_HMAC_KEY"):
+        Settings(_env_file=None)
+
+
+def test_prod_com_chave_sobe(monkeypatch: pytest.MonkeyPatch) -> None:
+    _com_env(monkeypatch, APP_ENV="prod", WAHA_HOOK_HMAC_KEY="fake-hmac")
+
+    assert Settings(_env_file=None).waha_hook_hmac_key is not None
+
+
+def test_local_segue_sem_chave_hmac(monkeypatch: pytest.MonkeyPatch) -> None:
+    _com_env(monkeypatch)
+
+    assert Settings(_env_file=None).waha_hook_hmac_key is None
