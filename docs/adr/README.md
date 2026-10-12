@@ -61,6 +61,7 @@ operacional: numeração, status e o índice.
 | [0049](0049-actions-fixadas-por-sha.md) | GitHub Actions fixadas pelo SHA do commit | Aceito | 2026-10-12 |
 | [0050](0050-hmac-do-webhook-obrigatorio-em-producao.md) | Assinatura HMAC do webhook obrigatória em produção | Aceito | 2026-10-12 |
 | [0051](0051-backup-do-disco-e-pitr-do-firestore.md) | Backup do disco da VM e Point-in-Time Recovery do Firestore | Aceito | 2026-10-12 |
+| [0052](0052-delete-so-do-autor-ou-admin.md) | `!delete` no grupo só para quem adicionou a palavra, admin do bot ou dono | Aceito | 2026-10-12 |
 
 ## Quando escrever um
 

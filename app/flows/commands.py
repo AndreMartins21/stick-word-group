@@ -245,8 +245,15 @@ async def _exportar(d: Deps, exportador: Exportador | None) -> None:
         await d.conversa.enviar(messages.exportacao_com_link(link, resultado.quantidade))
 
 
-async def apagar(d: Deps, sessao: Sessao, palavra: str) -> Sessao:
-    """`/delete N|palavra` (no grupo, `!delete`, M32): o número é o da lista do espaço."""
+async def apagar(
+    d: Deps,
+    sessao: Sessao,
+    palavra: str,
+    *,
+    pode_apagar: Callable[[Entry], Awaitable[bool]] | None = None,
+) -> Sessao:
+    """`/delete N|palavra` (no grupo, `!delete`, M32): o número é o da lista do espaço.
+    `pode_apagar` (M54, ADR-0052): no grupo, quem decide se esta pessoa pode apagar esta entrada."""
     if not palavra:
         await d.conversa.enviar(
             messages.grupo_delete_uso(d.p) if d.em_grupo else messages.COMANDO_DESCONHECIDO
@@ -255,6 +262,9 @@ async def apagar(d: Deps, sessao: Sessao, palavra: str) -> Sessao:
     entrada = await bloq(_achar_entrada, d.repo, palavra)
     if entrada is None:
         await d.conversa.enviar(messages.palavra_nao_encontrada(palavra, d.p, grupo=d.em_grupo))
+        return sessao
+    if pode_apagar is not None and not await pode_apagar(entrada):
+        await d.conversa.enviar(messages.so_quem_adicionou_apaga(d.p))
         return sessao
     await bloq(d.repo.apagar_entrada, entrada.slug)
     await d.conversa.enviar(messages.apagada(entrada.palavra))

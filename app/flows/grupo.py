@@ -25,7 +25,7 @@ from app.domain.agenda_grupo import (
     semanal_a_exibir,
 )
 from app.domain.choices import normalizar
-from app.domain.models import Estado, Membro, Papel, Profile, Sessao
+from app.domain.models import Entry, Estado, Membro, Papel, Profile, Sessao
 from app.domain.srs import vencida
 from app.flows import capture, commands, practice, review, semanal
 from app.flows.base import Autor, Deps, bloq
@@ -160,7 +160,9 @@ async def tratar(
         return await _semanal(d, sessao, perfil, autor, argumento, eh_admin or eh_dono)
 
     if comando in COMANDOS:
-        return await _executar(d, sessao, perfil, comando, argumento)
+        return await _executar(
+            d, sessao, perfil, comando, argumento, autor, eh_admin or eh_dono, eh_dono
+        )
 
     if estado == Estado.AWAIT_ACTION:
         return await conversar(d, sessao, perfil, texto)
@@ -170,7 +172,14 @@ async def tratar(
 
 
 async def _executar(
-    d: Deps, sessao: Sessao, perfil: Profile, comando: str, argumento: str
+    d: Deps,
+    sessao: Sessao,
+    perfil: Profile,
+    comando: str,
+    argumento: str,
+    autor: Autor,
+    eh_admin: Callable[[str], bool],
+    eh_dono: Callable[[str], bool],
 ) -> Sessao:
     if comando == "help":
         await d.conversa.enviar(messages.ajuda_do_grupo(d.p))
@@ -187,8 +196,24 @@ async def _executar(
     elif comando == "add":
         return await _adicionar(d, sessao, perfil, argumento)
     elif comando == "delete":
-        return await commands.apagar(d, sessao, argumento)
+        return await commands.apagar(
+            d, sessao, argumento, pode_apagar=_pode_apagar(autor, eh_admin, eh_dono)
+        )
     return sessao
+
+
+def _pode_apagar(
+    autor: Autor, eh_admin: Callable[[str], bool], eh_dono: Callable[[str], bool]
+) -> Callable[[Entry], Awaitable[bool]]:
+    """M54 (ADR-0052): `!delete` é de quem adicionou a palavra, de admin do bot ou do dono. Entradas
+    sem autor (anteriores ao M28) só os admins apagam."""
+
+    async def permitido(entrada: Entry) -> bool:
+        if review.mesma_pessoa(entrada.autor_id, autor.numero):
+            return True
+        return bool(await bloq(eh_admin, autor.numero) or await bloq(eh_dono, autor.numero))
+
+    return permitido
 
 
 async def _adicionar(d: Deps, sessao: Sessao, perfil: Profile, palavra: str) -> Sessao:

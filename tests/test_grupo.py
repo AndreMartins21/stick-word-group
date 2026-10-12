@@ -391,10 +391,57 @@ async def test_delete_por_palavra_e_por_numero_remove_da_lista_da_turma() -> Non
     await m.diz_no_grupo(ANA, "!add hedge")
     await m.diz_no_grupo(ANA, "!0")
 
-    assert await m.diz_no_grupo(BIA, "!delete stall") == ["🗑️ *stall* deleted."]
+    assert await m.diz_no_grupo(ANA, "!delete stall") == ["🗑️ *stall* deleted."]
     assert [e.slug for e in turma.listar_entradas()] == ["hedge"]
-    assert await m.diz_no_grupo(BIA, "!delete 1") == ["🗑️ *hedge* deleted."]
+    assert await m.diz_no_grupo(ANA, "!delete 1") == ["🗑️ *hedge* deleted."]
     assert turma.listar_entradas() == []
+
+
+async def test_delete_de_outra_pessoa_e_recusado_e_a_palavra_fica() -> None:
+    """M54 (ADR-0052): só quem adicionou, admin do bot ou o dono apagam."""
+    m = _grupo()
+    turma = m.banco.do_espaco(GRUPO)
+    await m.diz_no_grupo(ANA, "!add stall")
+    await m.diz_no_grupo(ANA, "!4")
+
+    (recusa,) = await m.diz_no_grupo(BIA, "!delete stall")
+
+    assert recusa == messages.so_quem_adicionou_apaga("!")
+    assert [e.slug for e in turma.listar_entradas()] == ["stall"]
+    _sem_comandos_do_privado([recusa])
+
+
+async def test_admin_do_bot_apaga_palavra_de_qualquer_um() -> None:
+    m = montar(tutor=_tutor(), admins=(BIA.numero,))
+    await m.diz_no_grupo(ANA, "!add stall")
+    await m.diz_no_grupo(ANA, "!4")
+
+    assert await m.diz_no_grupo(BIA, "!delete stall") == ["🗑️ *stall* deleted."]
+    assert m.banco.do_espaco(GRUPO).listar_entradas() == []
+
+
+async def test_dono_apaga_palavra_de_qualquer_um() -> None:
+    m = _grupo()
+    await m.diz_no_grupo(ANA, "!add stall")
+    await m.diz_no_grupo(ANA, "!4")
+
+    dono = Autor(DONO_NUMERO, "Dono")
+    assert await m.diz_no_grupo(dono, "!delete 1") == ["🗑️ *stall* deleted."]
+    assert m.banco.do_espaco(GRUPO).listar_entradas() == []
+
+
+async def test_palavra_sem_autor_so_o_admin_apaga() -> None:
+    m = montar(tutor=_tutor(), admins=(BIA.numero,))
+    turma = m.banco.do_espaco(GRUPO)
+    await m.diz_no_grupo(ANA, "!add stall")
+    await m.diz_no_grupo(ANA, "!4")
+    (entrada,) = turma.listar_entradas()
+    turma.salvar_entrada(entrada.model_copy(update={"autor_id": None}))
+
+    (recusa,) = await m.diz_no_grupo(ANA, "!delete stall")
+    assert recusa == messages.so_quem_adicionou_apaga("!")
+
+    assert await m.diz_no_grupo(BIA, "!delete stall") == ["🗑️ *stall* deleted."]
 
 
 async def test_delete_inexistente_e_sem_argumento_citam_o_prefixo_do_grupo() -> None:

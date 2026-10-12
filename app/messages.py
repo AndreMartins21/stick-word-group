@@ -896,6 +896,13 @@ def grupo_delete_uso(p: str = "!") -> str:
     return f"Tell me which word to remove: {p}delete stall — or its number in {p}list: {p}delete 3."
 
 
+def so_quem_adicionou_apaga(p: str = "!") -> str:
+    return (
+        "Only the person who added this word, or the bot's admins, can delete it. "
+        f"You can still use {p}add to bring your own."
+    )
+
+
 def papel_alterado(nome: str | None, papel: str) -> str:
     quem = nome or "That person"
     return f"✅ {quem} is now a {'teacher' if papel == 'professor' else 'student'}."
