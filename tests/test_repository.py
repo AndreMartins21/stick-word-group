@@ -541,6 +541,22 @@ def test_uso_do_dia_comeca_em_zero_e_soma(banco: Banco) -> None:
     assert banco.obter_uso_do_dia(date(2026, 10, 13)) == 0
 
 
+def test_uso_por_espaco_do_dia_soma_junto_com_o_total(banco: Banco) -> None:
+    """M50 (ADR-0048): o gasto de cada espaço vai na mesma escrita do total do dia."""
+    dia = date(2026, 10, 12)
+    assert banco.obter_uso_por_espaco_do_dia(dia) == {}
+
+    banco.somar_uso_do_dia(dia, 0.3, {"120363000000000001@g_us": 0.2, "5531999998888@c_us": 0.1})
+    banco.somar_uso_do_dia(dia, 0.4, {"120363000000000001@g_us": 0.4})
+    banco.somar_uso_do_dia(dia, 0.1)  # sem espaço: só o total
+
+    assert banco.obter_uso_do_dia(dia) == pytest.approx(0.8)
+    assert banco.obter_uso_por_espaco_do_dia(dia) == pytest.approx(
+        {"120363000000000001@g_us": 0.6, "5531999998888@c_us": 0.1}
+    )
+    assert banco.obter_uso_por_espaco_do_dia(date(2026, 10, 13)) == {}
+
+
 def test_grupo_pendente_registra_uma_vez_e_guarda_o_primeiro_horario(banco: Banco) -> None:
     assert banco.registrar_grupo_pendente(GRUPO, T0) is True
     assert banco.registrar_grupo_pendente(GRUPO, T1) is False  # o relógio de 24h não reinicia

@@ -32,6 +32,8 @@ _NUMERICOS = {
     "limite_grupo_dia",
     "limite_audio_segundos_dia",
     "orcamento_diario_usd",
+    "orcamento_mensal_usd",
+    "cota_diaria_por_grupo_usd",
     "max_fila_por_chat",
     "max_processamentos",
 }
@@ -76,6 +78,10 @@ class Settings(BaseSettings):
     # Orçamento diário de IA (M46, ADR-0044): ao somar este custo estimado (USD) no dia, o bot
     # pausa a IA até o dia seguinte e avisa o dono. Padrão US$ 5 (ADR-0047).
     orcamento_diario_usd: float = Field(default=5.0, gt=0)
+    # Teto mensal e cota diária por grupo (M50, ADR-0048): o mensal pausa a IA até o mês virar; a
+    # cota pausa só o grupo que a estourou, para um grupo ruidoso não gastar o dia de todos.
+    orcamento_mensal_usd: float = Field(default=50.0, gt=0)
+    cota_diaria_por_grupo_usd: float = Field(default=1.0, gt=0)
     # Fila (M47, ADR-0045): mensagens esperando a vez por chat e chats processando ao mesmo tempo.
     max_fila_por_chat: int = Field(default=3, ge=1)
     max_processamentos: int = Field(default=4, ge=1)

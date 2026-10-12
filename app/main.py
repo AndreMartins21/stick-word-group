@@ -172,7 +172,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     letras = LrclibProvider(base_url=settings.lyrics_url)
     banco = _criar_banco(settings)
     # M46 (ADR-0044): o custo estimado de cada chamada de IA alimenta o orçamento diário.
-    orcamento = Orcamento(banco, settings.orcamento_diario_usd, fuso=ZoneInfo(settings.timezone))
+    orcamento = Orcamento(
+        banco,
+        settings.orcamento_diario_usd,
+        fuso=ZoneInfo(settings.timezone),
+        limite_mensal_usd=settings.orcamento_mensal_usd,
+        cota_por_grupo_usd=settings.cota_diaria_por_grupo_usd,
+    )
     custo.definir_observador(orcamento.registrar)
     app.state.orcamento = orcamento
     app.state.channel = canal
@@ -755,7 +761,8 @@ async def _transcrever(
         await channel.send_text(grupo_id, messages.audio_grande_demais(max_segundos))
         return None
     mimetype = payload.mimetype_da_midia() or "audio/ogg"
-    texto = await run_in_threadpool(transcritor.transcrever, conteudo, mimetype)
+    with custo.no_espaco(grupo_id):  # M50: o custo da transcrição conta na cota do grupo
+        texto = await run_in_threadpool(transcritor.transcrever, conteudo, mimetype)
     if not texto:
         await channel.send_text(grupo_id, messages.AUDIO_SEM_FALA)
         return None

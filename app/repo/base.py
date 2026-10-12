@@ -10,6 +10,7 @@ cliente do Firestore também é síncrono.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Protocol
@@ -206,8 +207,15 @@ class Banco(Protocol):
         """O custo estimado de IA (USD) já gasto em `dia` (fuso do aluno); 0 se não houver (M46)."""
         ...
 
-    def somar_uso_do_dia(self, dia: date, usd: float) -> None:
-        """Soma `usd` ao gasto de `dia`, de forma atômica (M46, orçamento diário)."""
+    def somar_uso_do_dia(
+        self, dia: date, usd: float, por_espaco: Mapping[str, float] | None = None
+    ) -> None:
+        """Soma `usd` ao gasto de `dia`, de forma atômica (M46, orçamento diário). `por_espaco`
+        (M50) soma, na mesma escrita, o gasto de cada espaço (chave = id do chat, sem pontos)."""
+        ...
+
+    def obter_uso_por_espaco_do_dia(self, dia: date) -> dict[str, float]:
+        """O gasto de IA de cada espaço em `dia` (M50, cota por grupo); vazio se não houver."""
         ...
 
 

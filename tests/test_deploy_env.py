@@ -22,6 +22,8 @@ VARIAVEIS = {
     "LIMITE_GRUPO_DIA": "limite_grupo_dia",
     "LIMITE_AUDIO_SEGUNDOS_DIA": "limite_audio_segundos_dia",
     "ORCAMENTO_DIARIO_USD": "orcamento_diario_usd",
+    "ORCAMENTO_MENSAL_USD": "orcamento_mensal_usd",
+    "COTA_DIARIA_POR_GRUPO_USD": "cota_diaria_por_grupo_usd",
     "MAX_FILA_POR_CHAT": "max_fila_por_chat",
     "MAX_PROCESSAMENTOS": "max_processamentos",
     "GEMINI_THINKING_LEVEL": "gemini_thinking_level",

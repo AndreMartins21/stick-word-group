@@ -87,19 +87,31 @@ def uso_da_resposta(resposta: Any, *, audio: bool = False) -> Uso:
     )
 
 
-_OBSERVADOR: Callable[[float], None] | None = None
+_OBSERVADOR: Callable[[float, str | None], None] | None = None
+_ESPACO: ContextVar[str | None] = ContextVar("espaco_da_chamada", default=None)
 
 
-def definir_observador(observador: Callable[[float], None] | None) -> None:
-    """Quem recebe o custo (USD) de cada chamada concluída: o orçamento diário (M46, ADR-0044).
-    Um só, definido na subida do app; `None` desliga (testes)."""
+def definir_observador(observador: Callable[[float, str | None], None] | None) -> None:
+    """Quem recebe o custo (USD) de cada chamada concluída, com o espaço (chat) que a causou: o
+    orçamento (M46/M50, ADR-0044/ADR-0048). Um só, definido na subida do app; `None` desliga."""
     global _OBSERVADOR
     _OBSERVADOR = observador
 
 
+@contextmanager
+def no_espaco(espaco: str) -> Iterator[None]:
+    """As chamadas de IA feitas dentro do bloco (inclusive em threads, que herdam o contexto) são
+    atribuídas a `espaco` (M50, cota por grupo)."""
+    token = _ESPACO.set(espaco)
+    try:
+        yield
+    finally:
+        _ESPACO.reset(token)
+
+
 def notificar_gasto(usd: float) -> None:
     if _OBSERVADOR is not None:
-        _OBSERVADOR(usd)
+        _OBSERVADOR(usd, _ESPACO.get())
 
 
 def registrar_resposta(resposta: Any, *, audio: bool = False) -> Uso:

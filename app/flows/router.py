@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -40,6 +41,7 @@ from app.flows.commands import Exportador, StatusDaSessao
 from app.flows.conversa import Conversa
 from app.logging_config import id_curto, registrar_evento
 from app.repo.base import Banco
+from app.services import custo
 from app.services.audio import ServicoAudio
 from app.services.letras import LyricsProvider
 from app.services.limites import Decisao, LimitadorDeUso, Limites
@@ -53,6 +55,12 @@ MAX_CARACTERES_PADRAO = 500  # M40, ADR-0038
 # processando ao mesmo tempo (as threads do pool são poucas na e2-micro e também servem o Firestore).
 MAX_FILA_POR_CHAT_PADRAO = 3
 MAX_PROCESSAMENTOS_PADRAO = 4
+
+
+@asynccontextmanager
+async def _custo_no_espaco(chat_id: str) -> AsyncIterator[None]:
+    with custo.no_espaco(chat_id):
+        yield
 
 
 class Router:
@@ -93,7 +101,7 @@ class Router:
         self._limitador = LimitadorDeUso(limites, agora) if limites is not None else None
         # M46 (ADR-0044): esgotado o orçamento diário de IA, nada chega ao modelo até amanhã.
         self._orcamento = orcamento
-        self._pausa_avisada: dict[str, date] = {}  # chat -> dia (fuso) em que já foi avisado
+        self._pausa_avisada: dict[tuple[str, str], date] = {}  # (chat, motivo) -> dia do aviso
         # M47 (ADR-0045): fila por chat com teto e vagas de processamento globais.
         self._max_fila_por_chat = max_fila_por_chat
         self._na_fila: dict[str, int] = {}
@@ -153,9 +161,13 @@ class Router:
         O dono nunca é limitado. Chamado por `processar` e, para áudio, antes de transcrever."""
         if autor is not None and self._eh_dono(autor.numero):
             return True
-        if self._orcamento is not None and await bloq(self._orcamento.esgotado):
-            await self._avisar_pausa(chat_id)
-            return False
+        if self._orcamento is not None:
+            pausa: str | None = await bloq(self._orcamento.pausa)
+            if pausa is None and await bloq(self._orcamento.espaco_esgotado, chat_id):
+                pausa = "grupo"
+            if pausa is not None:
+                await self._avisar_pausa(chat_id, pausa)
+                return False
         if self._limitador is None:
             return True
         em_grupo = chat_id.endswith("@g.us")
@@ -177,17 +189,21 @@ class Router:
             await self._avisar_limite(chat_id, decisao)
         return False
 
-    async def _avisar_pausa(self, chat_id: str) -> None:
-        """Um aviso por chat por pausa (o conjunto zera quando o orçamento volta)."""
-        registrar_evento(logger, "pausa_de_orcamento", espaco=id_curto(chat_id))
+    async def _avisar_pausa(self, chat_id: str, pausa: str) -> None:
+        """Um aviso por chat por dia e por motivo (`dia`, `mes` ou `grupo`, a cota do grupo)."""
+        registrar_evento(logger, "pausa_de_orcamento", espaco=id_curto(chat_id), motivo=pausa)
         hoje = self._agora().astimezone(self._fuso).date()
-        if self._pausa_avisada.get(chat_id) == hoje:
+        if self._pausa_avisada.get((chat_id, pausa)) == hoje:
             return
-        self._pausa_avisada[chat_id] = hoje
+        self._pausa_avisada[(chat_id, pausa)] = hoje
+        texto = {
+            "mes": messages.PAUSA_DO_MES,
+            "grupo": messages.PAUSA_DO_GRUPO,
+        }.get(pausa, messages.PAUSA_DE_HOJE)
         async with self._trava(chat_id):
             conversa = self.conversa_do(chat_id)
             conversa.usuario_falou()
-            await conversa.enviar(messages.PAUSA_DE_HOJE)
+            await conversa.enviar(texto)
 
     async def _avisar_limite(self, chat_id: str, decisao: Decisao) -> None:
         texto = {
@@ -236,7 +252,7 @@ class Router:
     async def _processar_na_vez(
         self, texto: str, chat_id: str, autor: Autor | None, marcado: bool
     ) -> None:
-        async with self._trava(chat_id), self._vagas:
+        async with self._trava(chat_id), self._vagas, _custo_no_espaco(chat_id):
             d = self._deps(chat_id, autor)
             de_grupo: tuple[Autor, str, bool] | None = None
             if d.em_grupo:
@@ -408,7 +424,7 @@ class Router:
         não responde a uma. Mesma trava do resto (não pode correr junto de uma mensagem
         chegando). Nunca dispara sem um destino real já aprendido, e nunca interrompe uma
         conversa em andamento — quem decide isso é o próprio agendador, antes de chamar."""
-        async with self._trava(chat_id), self._vagas:
+        async with self._trava(chat_id), self._vagas, _custo_no_espaco(chat_id):
             d = self._deps(chat_id)
             perfil = await bloq(self._perfil, d)
             d = self._com_idioma(d, perfil)
@@ -423,7 +439,7 @@ class Router:
     async def iniciar_semanal(self, chat_id: str) -> None:
         """Chamado pelo agendador (M36): o bot inicia o desafio semanal do grupo. Mesma trava do
         resto; nunca interrompe uma atividade em andamento (sessão não expirada)."""
-        async with self._trava(chat_id), self._vagas:
+        async with self._trava(chat_id), self._vagas, _custo_no_espaco(chat_id):
             d = self._deps(chat_id)
             perfil = await bloq(self._perfil, d)
             d = self._com_idioma(d, perfil)

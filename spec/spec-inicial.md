@@ -84,6 +84,7 @@ A VM tem só 1 GB de RAM. Crie um **swap de 2 GB**, limite a memória dos contai
 | `GEMINI_THINKING_LEVEL` | `.env.infra` (opcional) | Padrão `minimal` (M44, ADR-0042): `thinking_level` do Gemini 3.x (cobrado como saída); vazio usa o padrão do modelo; se o modelo recusar, o bot segue sem ele |
 | `ORCAMENTO_DIARIO_USD` | `.env.infra` (opcional) | Padrão `5` (M46, ADR-0044; padrão de US$ 10 para US$ 5 no ADR-0047): ao somar este custo estimado de IA no dia (fuso do aluno), o bot pausa a IA e os lembretes até o dia seguinte e avisa o dono uma vez; o dono segue atendido |
 | `MAX_FILA_POR_CHAT` / `MAX_PROCESSAMENTOS` | `.env.infra` (opcionais) | Padrão `3` / `4` (M47, ADR-0045): mensagens de um chat esperando a vez (as demais são descartadas em silêncio) e chats processando ao mesmo tempo |
+| `ORCAMENTO_MENSAL_USD` / `COTA_DIARIA_POR_GRUPO_USD` | `.env.infra` (opcionais) | Padrão `50` / `1` (M50, ADR-0048): teto mensal de IA (pausa tudo até o mês virar) e cota diária de cada grupo (pausa só o grupo que a estourou; avisa o dono) |
 | `CONTACT_EMAIL` | `.env.infra` (opcional) | E-mail que o aviso "você não tem um plano" mostra a quem não está na lista (M15) |
 | `BOT_NUMBER` | `.env.infra` | Número Vivo do bot, só dígitos (informativo/logs) |
 | `WAHA_URL` | compose | `http://waha:3000` |
@@ -415,6 +416,7 @@ Send me another word or expression whenever you want.
 - Nunca mande mais de 3 mensagens seguidas sem uma resposta do usuário (o limite vale por espaço, M14).
 - **Limite de uso (M43, ADR-0041):** por pessoa 6/min e 150/dia, por grupo 400/dia, 600 s de áudio/dia por pessoa, em memória (janela deslizante). A primeira recusa avisa uma vez, o resto fica em silêncio; conversa entre pessoas no grupo não conta; o dono não é limitado.
 - **Fila (M47, ADR-0045):** no máximo 3 mensagens por chat esperando a vez (as demais são descartadas em silêncio, evento `fila_cheia`) e 4 chats processando ao mesmo tempo.
+- **Teto mensal e cota por grupo (M50, ADR-0048):** o gasto de IA de cada chamada é atribuído ao espaço que a causou (`custo.no_espaco`); a cota diária de um grupo pausa só ele até amanhã (um aviso ao grupo, uma DM ao dono, revisões e desafios do grupo não disparam); o teto mensal pausa a IA de todos até o mês virar (a soma dos dias do mês vem de `uso/{dia}`).
 - **Orçamento diário de IA (M46, ADR-0044):** esgotado o `ORCAMENTO_DIARIO_USD`, nenhuma mensagem chega à IA (um aviso por chat por dia), o agendador não dispara lembretes e o dono recebe uma DM; o dono continua atendido.
 - **Texto acima de `MAX_CARACTERES` (500) é recusado** (M40, ADR-0038) com um aviso curto, antes do banco e da IA; no grupo só vale para o que o bot lê (marcação, citação, comando).
 - **A IA nunca é chamada para quem não tem plano** (M15): número fora da lista só recebe o aviso "você
@@ -665,7 +667,7 @@ Desde o M14 (ADR-0017) tudo abaixo de `profile/me` até `entries/{slug}/sentence
 **espaço**, `espacos/{espaco_id}/...`, com `espaco_id` o chat id (`NUMERO@c.us` no privado). O
 documento `espacos/{espaco_id}` guarda `{tipo:"privado"|"grupo", criado_em, proximo_tick?}`, em que
 `proximo_tick` espelha o perfil para o agendador achar os lembretes vencidos com uma consulta só.
-`processed/` e `lids/` continuam globais (M48, ADR-0046: o `FirestoreBanco` guarda em memória, por 60 s, a lista de admins e o estado ativo de cada grupo — invalidados pelas mutações — e o LID já resolvido), assim como `uso/{AAAA-MM-DD}` (`{usd}`: custo estimado de IA do dia, incrementado em lote, M46, ADR-0044). Os caminhos abaixo são relativos ao espaço.
+`processed/` e `lids/` continuam globais (M48, ADR-0046: o `FirestoreBanco` guarda em memória, por 60 s, a lista de admins e o estado ativo de cada grupo — invalidados pelas mutações — e o LID já resolvido), assim como `uso/{AAAA-MM-DD}` (`{usd, espacos: {chat: usd}}`: custo estimado de IA do dia, total e por espaço, incrementado em lote, M46/M50, ADR-0044/ADR-0048; o id do chat sem os pontos). Os caminhos abaixo são relativos ao espaço.
 ```
 profile/me                 { nivel, criado_em, nome?,
                              lembretes_por_dia, janela_inicio, janela_fim, chat_id?,
@@ -853,6 +855,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M47 | Fila limitada (seção 5.6, ADR-0045): `MAX_FILA_POR_CHAT` (3) e `MAX_PROCESSAMENTOS` (4) no `Router`, evento `fila_cheia` (ADR-0045) | `make check` passa; com o chat já com 3 mensagens esperando, as seguintes são descartadas em silêncio e registradas; chats diferentes não dividem a fila; no máximo 4 chats processam ao mesmo tempo, sem perder mensagens; o contador volta a zero mesmo com erro |
 | M48 | Cache de acesso (seção 7.1, ADR-0046): `FirestoreBanco` com validade de 60 s para `listar_admins` e `grupo_esta_ativo` (invalidados pelas mutações) e cache permanente do LID resolvido (ADR-0046) | `make check` passa; 5 chamadas seguidas leem o Firestore uma vez; adicionar/remover admin e ativar/desativar grupo invalidam; o LID resolvido não é lido de novo e o desconhecido não é cacheado |
 | M49 | Orçamento de US$ 5 e limites no deploy (seções 4/10.9): padrão `ORCAMENTO_DIARIO_USD=5`; `deploy.sh` e `ci.yml` levam os limites do M40-M48 e `GEMINI_THINKING_LEVEL` ao `.env` da VM (ADR-0047) | `make check` passa; `.env` renderizado traz as variáveis com os padrões; vazio na GitHub Variable usa o padrão; sem a variável, o orçamento diário é US$ 5 |
+| M50 | Teto mensal e cota por grupo (seções 4/5.2b/7.1/12): `Orcamento` com `ORCAMENTO_MENSAL_USD` (50) e `COTA_DIARIA_POR_GRUPO_USD` (1), custo atribuído ao espaço por `custo.no_espaco`, `uso/{dia}.espacos`, `Banco.obter_uso_por_espaco_do_dia` (ADR-0048) | `make check` passa; o mês soma os dias e pausa a IA até virar; o grupo que estoura a cota é pausado sozinho (um aviso ao grupo, uma DM ao dono, sem lembretes) e os demais seguem; restart não reenvia avisos; o custo da transcrição conta no grupo |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 
@@ -1030,8 +1033,9 @@ Catálogo de eventos:
 | `grupo_pendente` | `main.py:_registrar_pendente` | `espaco` | funil de ativação de grupos |
 | `saiu_de_grupo` | `Agendador._sair_de_grupos_pendentes` | `espaco` | grupos abandonados em 24h |
 | `numero_sem_plano` | `main.py:_avisar_sem_plano` | — | demanda reprimida |
-| `pausa_de_orcamento` | `Router._avisar_pausa` (M46) | `espaco` | mensagens recusadas por orçamento esgotado |
-| `orcamento_esgotado` | `services/orcamento.py:avisar_esgotado` (M46) | `n` (centavos gastos), `total` (limite em centavos) | dia em que o disjuntor disparou |
+| `cota_do_grupo_esgotada` | `Agendador._avisar_cotas_de_grupo` (M50) | `espaco` | grupos que gastam demais |
+| `pausa_de_orcamento` | `Router._avisar_pausa` (M46; `motivo` no M50: `dia`\|`mes`\|`grupo`) | `espaco`, `motivo` | mensagens recusadas por orçamento esgotado |
+| `orcamento_esgotado` | `services/orcamento.py:avisar_esgotado` (M46) | `motivo` (`dia`\|`mes`, M50), `n` (centavos gastos), `total` (limite em centavos) | dia em que o disjuntor disparou |
 | `fila_cheia` | `Router.processar` (M47) | `espaco` | flood ou fila por chat apertada |
 | `limite_atingido` | `Router.admitir` (M43) | `espaco`, `tipo_espaco`, `motivo` (`minuto`\|`dia`\|`grupo`\|`audio`), `avisou` | abuso e flood, limites apertados demais |
 | `audio_recusado` | `main.py:_transcrever` (M41) | `motivo` (`duracao_ou_tamanho_declarado`\|`tamanho_baixado`) | áudio acima do teto |

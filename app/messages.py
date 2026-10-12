@@ -58,11 +58,28 @@ LIMITE_DE_AUDIO = "🎙️ You've used up today's voice-message time with me. Te
 PAUSA_DE_HOJE = "⏸️ I'm taking a break from thinking for today. See you tomorrow!"
 
 
-def orcamento_do_dono(limite_usd: float) -> str:
-    """O aviso ao dono quando o orçamento diário de IA esgota (M46, ADR-0044)."""
+PAUSA_DO_MES = "⏸️ I'm taking a break from thinking until next month. See you then!"
+PAUSA_DO_GRUPO = "⏸️ This group used up today's thinking budget. Back tomorrow!"
+
+
+def orcamento_do_dono(limite_usd: float, *, mensal: bool = False) -> str:
+    """O aviso ao dono quando o orçamento de IA esgota (M46, ADR-0044; mensal no M50, ADR-0048)."""
+    if mensal:
+        return (
+            f"⏸️ Monthly AI budget reached (US$ {limite_usd:.2f}). I'm pausing AI replies and "
+            "reminders until next month. Raise ORCAMENTO_MENSAL_USD if this was expected."
+        )
     return (
         f"⏸️ Daily AI budget reached (US$ {limite_usd:.2f}). I'm pausing AI replies and reminders "
         "until tomorrow. Raise ORCAMENTO_DIARIO_USD if this was expected."
+    )
+
+
+def cota_do_grupo_para_o_dono(grupo_id: str, cota_usd: float) -> str:
+    """Um grupo estourou a cota diária de IA (M50, ADR-0048): só ele fica pausado até amanhã."""
+    return (
+        f"⚠️ Group {grupo_id} used its daily AI quota (US$ {cota_usd:.2f}) and is paused until "
+        "tomorrow. If that's abuse, deactivate it with !deactivate."
     )
 
 

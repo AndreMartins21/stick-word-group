@@ -16,7 +16,7 @@ Antes do M14 (multiusuário) `profile`, `session` e `entries` ficavam na raiz do
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import date, datetime
 from typing import Any
 
@@ -380,7 +380,14 @@ class FirestoreBanco:
         dados = self._db.collection("uso").document(dia.isoformat()).get().to_dict()
         return float(dados.get("usd", 0.0)) if dados else 0.0
 
-    def somar_uso_do_dia(self, dia: date, usd: float) -> None:
-        self._db.collection("uso").document(dia.isoformat()).set(
-            {"usd": firestore.Increment(usd)}, merge=True
-        )
+    def somar_uso_do_dia(
+        self, dia: date, usd: float, por_espaco: Mapping[str, float] | None = None
+    ) -> None:
+        corpo: dict[str, Any] = {"usd": firestore.Increment(usd)}
+        if por_espaco:
+            corpo["espacos"] = {e: firestore.Increment(v) for e, v in por_espaco.items()}
+        self._db.collection("uso").document(dia.isoformat()).set(corpo, merge=True)
+
+    def obter_uso_por_espaco_do_dia(self, dia: date) -> dict[str, float]:
+        dados = self._db.collection("uso").document(dia.isoformat()).get().to_dict() or {}
+        return {e: float(v) for e, v in (dados.get("espacos") or {}).items()}

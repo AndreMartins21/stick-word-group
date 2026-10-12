@@ -121,14 +121,36 @@ class Agendador:
     async def _orcamento_pausado(self) -> bool:
         """Orçamento diário de IA esgotado (M46): nenhum lembrete sai (os atrasados viram
         `lembrete_desistido` quando o dia virar). Na primeira vez do dia, avisa o dono."""
-        if self._orcamento is None or not await bloq(self._orcamento.esgotado):
+        if self._orcamento is None:
             return False
-        if await bloq(self._orcamento.acabou_de_esgotar):
-            avisar_esgotado(self._orcamento)
+        await self._avisar_cotas_de_grupo()
+        if not await bloq(self._orcamento.esgotado):
+            return False
+        motivo = await bloq(self._orcamento.acabou_de_esgotar)
+        if motivo is not None:
+            avisar_esgotado(self._orcamento, motivo)
             if self._avisar_dono is not None:
+                mensal = motivo == "mes"
+                limite = (
+                    (self._orcamento.limite_mensal_usd or 0)
+                    if mensal
+                    else (self._orcamento.limite_usd)
+                )
                 with contextlib.suppress(Exception):
-                    await self._avisar_dono(messages.orcamento_do_dono(self._orcamento.limite_usd))
+                    await self._avisar_dono(messages.orcamento_do_dono(limite, mensal=mensal))
         return True
+
+    async def _avisar_cotas_de_grupo(self) -> None:
+        """Grupo que estourou a cota diária (M50, ADR-0048): um aviso ao dono por grupo por dia."""
+        orcamento = self._orcamento
+        if orcamento is None:
+            return
+        for grupo_id in await bloq(orcamento.grupos_recem_esgotados):
+            registrar_evento(logger, "cota_do_grupo_esgotada", espaco=id_curto(grupo_id))
+            if self._avisar_dono is not None:
+                cota = orcamento.cota_por_grupo_usd or 0.0
+                with contextlib.suppress(Exception):
+                    await self._avisar_dono(messages.cota_do_grupo_para_o_dono(grupo_id, cota))
 
     async def _rodar_snapshot_se_for_a_hora(self, agora_utc: datetime) -> None:
         """Uma vez por dia, na janela de `_hora_do_snapshot` (M28, seção 12 da spec): sem
@@ -171,6 +193,12 @@ class Agendador:
             and not await bloq(self._grupo_autorizado, espaco_id)
         ):
             return
+        if (
+            self._orcamento is not None
+            and espaco_id.endswith("@g.us")
+            and await bloq(self._orcamento.espaco_esgotado, espaco_id)
+        ):
+            return  # cota diária do grupo esgotada (M50): sem revisão nem desafio até amanhã
         repo = self._banco.do_espaco(espaco_id)
         perfil = await bloq(repo.obter_perfil)
         if perfil is not None and perfil.chat_id is not None and espaco_id.endswith("@g.us"):
