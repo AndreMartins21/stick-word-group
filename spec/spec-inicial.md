@@ -844,6 +844,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M42 | WAHA só baixa áudio (seções 10.7/8.3): `WAHA_EVENTS_DOWNLOAD_MEDIA_MIMETYPES=audio` e `WHATSAPP_FILES_LIFETIME` explícito no compose (ADR-0040) | `make check` passa; `docker compose config` válido; teste confere o filtro e o tempo de vida dos arquivos; vídeo/foto/documento de qualquer chat chegam com `media.url` nulo e nada vai ao disco |
 | M43 | Limite de uso (seções 4/5.6/12): `LimitadorDeUso` em janela deslizante, por pessoa (6/min, 150/dia), por grupo (400/dia) e segundos de áudio por pessoa (600/dia), `Router.admitir`, evento `limite_atingido` (ADR-0041) | `make check` passa; a 7ª mensagem no minuto recebe um aviso e as seguintes nada, sem chegar à IA; recusa não consome a janela; o dono não é limitado; conversa entre pessoas no grupo não gasta limite; áudio acima do orçamento não é baixado |
 | M44 | Teto de saída e raciocínio (seções 4/6): `max_output_tokens` (2.048 nas tarefas, 1.024 na transcrição) e `GEMINI_THINKING_LEVEL` (padrão `minimal`), recuo automático se o modelo recusar (ADR-0042) | `make check` passa; o config enviado ao Gemini tem teto e `thinking_config`; um 400 do modelo refaz a chamada sem o nível, uma vez por processo, sem virar `LLMError`; vazio no env usa o padrão do modelo |
+| M45 | Tokens e custo no log (seções 12/10.8): `services/custo.py`, `llm_chamada` com `tokens_entrada`/`tokens_saida`/`tokens_thinking`/`custo_usd`, novo evento `transcricao_chamada`, `infra/setup_orcamento.sh` (Budget com alertas 50/90/100%) (ADR-0043) | `make check` passa; o uso de todas as tentativas é somado numa linha `llm_chamada`; transcrição registra tokens de áudio e custo; resposta sem `usage_metadata` vale zero; script passa em `bash -n` e shellcheck |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 
@@ -925,6 +926,8 @@ Mostre também como ver a senha do painel **localmente e só quando eu pedir** (
 
 ### 10.8 Custos (para você respeitar)
 A VM `e2-micro` com disco standard de 30 GB em `us-central1` está no nível gratuito. O Gemini no Vertex AI é pago por uso (centavos neste volume), coberto pelos créditos do trial. Os créditos do trial **não** pagam modelos de parceiros (ex.: Claude no Vertex), por isso ele não é opção aqui. O IP externo **não** está: custa alguns dólares por mês, coberto pelos créditos do trial. Firestore, Storage e Secret Manager ficam nas cotas gratuitas. O Cloud Text-to-Speech (M23) também: 1M de caracteres por mês em Neural2 (4M em Standard/WaveNet), e o cache evita sintetizar o mesmo texto duas vezes. Não crie Cloud NAT, balanceador, IP estático reservado nem máquinas maiores.
+
+**Alertas de custo (M45, ADR-0043):** `infra/setup_orcamento.sh` cria o Budget `vocabot-mensal` (`ORCAMENTO_MENSAL_USD`, padrão 30) com alertas em 50/90/100%; só avisa, não corta.
 
 ### 10.9 Deploy contínuo via GitHub Actions (M11, ADR-0013)
 
@@ -1010,7 +1013,8 @@ Catálogo de eventos:
 | `revisao_concluida` | `flows/review.py` (fim da rodada) | `espaco`, `tipo_espaco`, `n` (feitas), `total`, `lapsos`, `motivo` (`manual`\|`fila_vazia`\|`timeout`) | taxa de conclusão das revisões |
 | `revisao_resposta` | `flows/review.py:responder` | `espaco`, `tipo_espaco`, `qualidade`, `marcado` (só em grupo) | distribuição de qualidade, taxa de acerto |
 | `marcacao_expirada` | `Agendador._expirar_marcacoes` | `espaco` | engajamento nos grupos |
-| `llm_chamada` | `services/llm.py:_gerar_validado` | `metodo`, `modelo`, `ok`, `latencia_ms` | volume, latência, falhas da IA |
+| `llm_chamada` | `services/llm.py:_gerar_validado` | `metodo`, `modelo`, `ok`, `latencia_ms`, `tokens_entrada`, `tokens_saida`, `tokens_thinking`, `custo_usd` (M45, soma das tentativas) | volume, latência, falhas e custo da IA |
+| `transcricao_chamada` | `services/transcricao.py:GeminiTranscritor.transcrever` (M45) | `modelo`, `ok`, `latencia_ms`, `tokens_audio`, `tokens_saida`, `tokens_thinking`, `custo_usd` | custo e volume da transcrição de áudio |
 | `tts_chamada` | `services/audio.py:ServicoAudio.obter` | `ok`, `cache` (`hit`\|`miss`), `caracteres`, `latencia_ms` (só no miss) | volume e custo do Cloud TTS, taxa de acerto do cache |
 | `grupo_ativado` / `grupo_desativado` | `flows/admin.py` | `espaco` | funil de ativação de grupos |
 | `grupo_pendente` | `main.py:_registrar_pendente` | `espaco` | funil de ativação de grupos |

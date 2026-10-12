@@ -40,7 +40,7 @@ from app.domain.models import (
     nivel_so_ingles,
 )
 from app.logging_config import registrar_evento
-from app.services import prompts
+from app.services import custo, prompts
 from app.services.prompts import Prompt
 
 logger = logging.getLogger(__name__)
@@ -177,6 +177,7 @@ class VertexGeminiProvider:
             raise LLMError(f"o Gemini recusou a chamada ({erro.code} {erro.status})") from erro
         except httpx.HTTPError as erro:
             raise LLMError(f"sem resposta do Gemini ({type(erro).__name__})") from erro
+        custo.registrar_resposta(resposta)
         texto: str | None = resposta.text
         if not texto:
             raise LLMError("o Gemini não devolveu texto (resposta vazia ou bloqueada)")
@@ -301,6 +302,22 @@ def _gerar_validado[T: BaseModel](
     tentativas: `ok=False` tanto para uma falha de transporte (`LLMError` do provider) quanto para
     todas as tentativas rejeitadas na validação."""
     inicio = time.monotonic()
+    with custo.medir() as uso:
+        return _gerar_com_retentativa(
+            provider, prompt, schema, modelo, temperatura, validar, inicio, uso
+        )
+
+
+def _gerar_com_retentativa[T: BaseModel](
+    provider: LLMProvider,
+    prompt: Prompt,
+    schema: type[T],
+    modelo: str,
+    temperatura: float,
+    validar: Callable[[T], None] | None,
+    inicio: float,
+    uso: custo.Uso,
+) -> T:
     ok = False
     try:
         usuario = prompt.usuario
@@ -338,6 +355,10 @@ def _gerar_validado[T: BaseModel](
             modelo=modelo,
             ok=ok,
             latencia_ms=round((time.monotonic() - inicio) * 1000),
+            tokens_entrada=uso.entrada,
+            tokens_saida=uso.saida,
+            tokens_thinking=uso.raciocinio,
+            custo_usd=round(custo.custo_usd(modelo, uso), 6),
         )
 
 

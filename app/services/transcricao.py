@@ -5,12 +5,15 @@ serviço da VM — sem chave nem serviço novo."""
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Protocol
 
 import httpx
 from google.genai import errors as genai_errors
 from google.genai import types
 
+from app.logging_config import registrar_evento
+from app.services import custo
 from app.services.llm import LLMError, criar_cliente_vertex, nivel_de_raciocinio
 
 logger = logging.getLogger(__name__)
@@ -55,6 +58,28 @@ class GeminiTranscritor:
         self._thinking_level = thinking_level
 
     def transcrever(self, conteudo: bytes, mimetype: str) -> str:
+        """Emite `transcricao_chamada` (M45, ADR-0043) com os tokens de áudio e o custo estimado."""
+        inicio = time.monotonic()
+        ok = False
+        with custo.medir() as uso:
+            try:
+                texto = self._transcrever(conteudo, mimetype)
+                ok = True
+                return texto
+            finally:
+                registrar_evento(
+                    logger,
+                    "transcricao_chamada",
+                    modelo=self._modelo,
+                    ok=ok,
+                    latencia_ms=round((time.monotonic() - inicio) * 1000),
+                    tokens_audio=uso.audio,
+                    tokens_saida=uso.saida,
+                    tokens_thinking=uso.raciocinio,
+                    custo_usd=round(custo.custo_usd(self._modelo, uso), 6),
+                )
+
+    def _transcrever(self, conteudo: bytes, mimetype: str) -> str:
         audio = types.Part.from_bytes(data=conteudo, mime_type=_sem_parametros(mimetype))
         try:
             resposta = self._gerar(audio, com_raciocinio=True)
@@ -71,6 +96,7 @@ class GeminiTranscritor:
             raise LLMError(f"o Gemini recusou o áudio ({erro.code} {erro.status})") from erro
         except httpx.HTTPError as erro:
             raise LLMError(f"sem resposta do Gemini ({type(erro).__name__})") from erro
+        custo.registrar_resposta(resposta, audio=True)
         return (resposta.text or "").strip()
 
     def _gerar(self, audio: types.Part, *, com_raciocinio: bool) -> Any:
