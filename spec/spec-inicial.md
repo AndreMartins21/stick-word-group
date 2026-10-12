@@ -838,6 +838,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M39 | Nota de voz no grupo, transcrita pelo Gemini, só quando cita uma mensagem do bot (seções 5.2b/8.1/8.3, ADR-0037): `MessagePayload.media`/`eh_audio`, `ChannelComLid.download_media`, `Transcritor` + `FakeTranscritor`, `GEMINI_MODEL_AUDIO`, `messages.audio_transcrito` | `make check` passa; áudio citando o bot vira `🎙️ _texto_` + resposta comum; áudio sem citação, citando outra pessoa ou outra mídia: nada lido, gravado nem marcado como lido; longo, sem fala, sem transcritor e falhas só avisam; `download_media` usa o host e a API key do bot |
 | M40 | Limite de caracteres por mensagem (seções 4/5.6): `MAX_CARACTERES` (padrão 500), checado no `Router.processar` antes do banco e da IA (ADR-0038) | `make check` passa; texto de 501 caracteres recebe `texto_longo_demais` sem chamar o tutor, no privado e no grupo; 500 passa; conversa entre pessoas no grupo segue ignorada |
 | M41 | Limite de duração e de bytes do áudio (seções 5.2b/8.3): `MAX_SEGUNDOS_AUDIO` (padrão 60) lido do `audioMessage.seconds`, `download_media(max_bytes)` em streaming, teto de 1 MB, eco da transcrição cortado em 300 caracteres (ADR-0039) | `make check` passa; áudio com `seconds` acima do teto ou `fileLength` acima de 1 MB é recusado sem baixar; sem os campos, o download aborta ao passar de 1 MB sem ler o resto; o eco da transcrição passa de 300 caracteres só com `…` |
+| M42 | WAHA só baixa áudio (seções 10.7/8.3): `WAHA_EVENTS_DOWNLOAD_MEDIA_MIMETYPES=audio` e `WHATSAPP_FILES_LIFETIME` explícito no compose (ADR-0040) | `make check` passa; `docker compose config` válido; teste confere o filtro e o tempo de vida dos arquivos; vídeo/foto/documento de qualquer chat chegam com `media.url` nulo e nada vai ao disco |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 
@@ -908,6 +909,7 @@ Mostre também como ver a senha do painel **localmente e só quando eu pedir** (
   - volume `waha_sessions` na pasta de sessões;
   - API key e credenciais do painel vindas do `.env`;
   - webhook para `http://bot:8000/waha/webhook` com os eventos `message` e `session.status`;
+  - **M42 (ADR-0040):** `WAHA_EVENTS_DOWNLOAD_MEDIA_MIMETYPES=audio` (só áudio é baixado; o resto chega com `media.url` nulo) e `WHATSAPP_FILES_LIFETIME=180`;
   - reinício automático das sessões ao subir;
   - porta publicada **só em `127.0.0.1:3000`** (para o túnel);
   - `restart: unless-stopped`, `mem_limit: 400m`.

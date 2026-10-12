@@ -49,6 +49,7 @@ operacional: numeração, status e o índice.
 | [0037](0037-audio-no-grupo-transcrito-pelo-gemini.md) | Nota de voz no grupo, transcrita pelo Gemini, só quando cita uma mensagem do bot | Aceito | 2026-10-12 |
 | [0038](0038-limite-de-tamanho-do-texto.md) | Limite de tamanho do texto que chega à IA: recusar, não truncar | Aceito | 2026-10-12 |
 | [0039](0039-limite-de-duracao-e-de-bytes-do-audio.md) | Áudio recusado pela duração declarada, antes de baixar, e download em streaming com teto de bytes | Aceito | 2026-10-12 |
+| [0040](0040-waha-so-baixa-audio.md) | WAHA baixa só áudio: filtro de mimetype por prefixo e vida curta dos arquivos | Aceito | 2026-10-12 |
 
 ## Quando escrever um
 

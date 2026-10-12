@@ -32,6 +32,12 @@ services:
       WHATSAPP_HOOK_URL: http://bot:8000/waha/webhook
       WHATSAPP_HOOK_EVENTS: message,session.status,group.v2.join
       WHATSAPP_HOOK_HMAC_KEY: ${WAHA_HOOK_HMAC_KEY:-}
+      # M42 (ADR-0040): o padrão do WAHA baixa TODA mídia de TODOS os chats (vídeo, foto, documento
+      # de qualquer grupo em que o bot está) para o disco do container. O bot só usa áudio: o filtro
+      # é por prefixo (`audio` casa `audio/ogg; codecs=opus`); o resto chega com `media.url` nulo.
+      WAHA_EVENTS_DOWNLOAD_MEDIA_MIMETYPES: audio
+      # Arquivos baixados somem em 3 min (padrão do WAHA, explícito para não depender dele).
+      WHATSAPP_FILES_LIFETIME: "180"
       WAHA_LOG_FORMAT: JSON
     depends_on:
       bot:
