@@ -53,6 +53,7 @@ operacional: numeração, status e o índice.
 | [0041](0041-limite-de-uso-por-pessoa-e-por-grupo.md) | Limite de uso por pessoa e por grupo, em memória, com aviso único | Aceito | 2026-10-12 |
 | [0042](0042-teto-de-saida-e-nivel-de-raciocinio-do-gemini.md) | Teto de tokens de saída e nível de raciocínio mínimo no Gemini, com recuo automático | Aceito | 2026-10-12 |
 | [0043](0043-tokens-e-custo-por-chamada-no-log.md) | Tokens e custo estimado por chamada de IA nos logs, e Budget da GCP só para alertar | Aceito | 2026-10-12 |
+| [0044](0044-orcamento-diario-de-ia-como-disjuntor-global.md) | Orçamento diário de IA como disjuntor global, persistido no Firestore | Aceito | 2026-10-12 |
 
 ## Quando escrever um
 

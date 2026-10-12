@@ -12,12 +12,14 @@ alunos parados.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from app import messages
 from app.domain.agenda_grupo import MAX_REVISOES_SEM_RESPOSTA, proxima_diaria, proxima_semanal
 from app.domain.lembretes import proximo_horario
 from app.domain.models import Estado, Profile
@@ -29,6 +31,7 @@ from app.flows.router import Router
 from app.logging_config import id_curto, registrar_evento
 from app.repo.base import Banco, Repository, tipo_do_espaco
 from app.services.metricas_destino import DestinoDeMetricas
+from app.services.orcamento import Orcamento, avisar_esgotado
 from app.services.snapshot import montar_snapshot, tabelas
 
 logger = logging.getLogger(__name__)
@@ -54,6 +57,8 @@ class Agendador:
         grupo_autorizado: Callable[[str], bool] | None = None,
         destino_de_metricas: DestinoDeMetricas | None = None,
         hora_do_snapshot: int = HORA_PADRAO_DO_SNAPSHOT,
+        orcamento: Orcamento | None = None,
+        avisar_dono: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         self._router = router
         self._banco = banco
@@ -68,6 +73,9 @@ class Agendador:
         # explícito (o `dev`/CI nunca configuram um).
         self._destino_de_metricas = destino_de_metricas
         self._hora_do_snapshot = hora_do_snapshot
+        # M46 (ADR-0044): orçamento diário esgotado pausa os lembretes e avisa o dono uma vez.
+        self._orcamento = orcamento
+        self._avisar_dono = avisar_dono
         self._parar = False
 
     def parar(self) -> None:
@@ -89,7 +97,14 @@ class Agendador:
             await self._expirar_marcacoes(agora_utc)
         except Exception:  # o Firestore falhando aqui não pode calar os lembretes do próximo tick
             logger.exception("falha ao fechar revisões de grupo paradas")
-        for espaco_id in await bloq(self._banco.listar_espacos_com_lembrete, agora_utc):
+        try:
+            pausado = await self._orcamento_pausado()
+        except Exception:  # o orçamento falhando não pode calar o resto do tick
+            logger.exception("falha ao conferir o orçamento diário")
+            pausado = False
+        for espaco_id in (
+            [] if pausado else await bloq(self._banco.listar_espacos_com_lembrete, agora_utc)
+        ):
             try:
                 await self._tick_espaco(espaco_id)
             except Exception:  # um espaço com problema não pode calar os outros
@@ -102,6 +117,18 @@ class Agendador:
             await self._rodar_snapshot_se_for_a_hora(agora_utc)
         except Exception:  # o snapshot nunca pode calar os lembretes (M28)
             logger.exception("falha no snapshot diário; os lembretes seguem")
+
+    async def _orcamento_pausado(self) -> bool:
+        """Orçamento diário de IA esgotado (M46): nenhum lembrete sai (os atrasados viram
+        `lembrete_desistido` quando o dia virar). Na primeira vez do dia, avisa o dono."""
+        if self._orcamento is None or not await bloq(self._orcamento.esgotado):
+            return False
+        if await bloq(self._orcamento.acabou_de_esgotar):
+            avisar_esgotado(self._orcamento)
+            if self._avisar_dono is not None:
+                with contextlib.suppress(Exception):
+                    await self._avisar_dono(messages.orcamento_do_dono(self._orcamento.limite_usd))
+        return True
 
     async def _rodar_snapshot_se_for_a_hora(self, agora_utc: datetime) -> None:
         """Uma vez por dia, na janela de `_hora_do_snapshot` (M28, seção 12 da spec): sem

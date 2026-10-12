@@ -529,6 +529,18 @@ def test_ultimo_snapshot_e_none_e_depois_persiste(banco: Banco) -> None:
     assert banco.obter_ultimo_snapshot() == date(2026, 9, 29)
 
 
+def test_uso_do_dia_comeca_em_zero_e_soma(banco: Banco) -> None:
+    """M46 (ADR-0044): o orçamento diário de IA persiste o gasto por dia, somando."""
+    dia = date(2026, 10, 12)
+    assert banco.obter_uso_do_dia(dia) == 0
+
+    banco.somar_uso_do_dia(dia, 0.25)
+    banco.somar_uso_do_dia(dia, 0.5)
+
+    assert banco.obter_uso_do_dia(dia) == pytest.approx(0.75)
+    assert banco.obter_uso_do_dia(date(2026, 10, 13)) == 0
+
+
 def test_grupo_pendente_registra_uma_vez_e_guarda_o_primeiro_horario(banco: Banco) -> None:
     assert banco.registrar_grupo_pendente(GRUPO, T0) is True
     assert banco.registrar_grupo_pendente(GRUPO, T1) is False  # o relógio de 24h não reinicia

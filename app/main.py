@@ -52,12 +52,14 @@ from app.logging_config import configurar_logs, id_curto, registrar_evento
 from app.repo.base import Banco, tipo_do_espaco
 from app.repo.firestore import FirestoreBanco
 from app.repo.memory import MemoryBanco
+from app.services import custo
 from app.services.audio import ServicoAudio
 from app.services.lembretes import Agendador
 from app.services.letras import LrclibProvider
 from app.services.llm import criar_tutor
 from app.services.log_handler import criar_handler_da_nuvem
 from app.services.metricas_destino import DestinoDeMetricas, criar_destino_gcs
+from app.services.orcamento import Orcamento
 from app.services.planilha import ExportadorExcel
 from app.services.storage import (
     Armazenamento,
@@ -169,6 +171,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     letras = LrclibProvider(base_url=settings.lyrics_url)
     banco = _criar_banco(settings)
+    # M46 (ADR-0044): o custo estimado de cada chamada de IA alimenta o orçamento diário.
+    orcamento = Orcamento(banco, settings.orcamento_diario_usd, fuso=ZoneInfo(settings.timezone))
+    custo.definir_observador(orcamento.registrar)
+    app.state.orcamento = orcamento
     app.state.channel = canal
     app.state.banco = banco
     app.state.transcritor = _criar_transcritor(settings)
@@ -182,6 +188,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         prefixo_do_grupo=settings.group_prefix,
         max_caracteres=settings.max_caracteres,
         limites=settings.limites,
+        orcamento=orcamento,
         eh_dono=settings.eh_dono,
         eh_admin=lambda numero: admin.eh_admin(_acesso(settings, canal, banco), numero),
         config_grupo=ConfigGrupo(
@@ -208,6 +215,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             _acesso(settings, canal, banco), grupo_id
         ),
         destino_de_metricas=_criar_destino_metricas(settings),
+        orcamento=orcamento,
+        avisar_dono=lambda texto: canal.send_text(f"{settings.dono}@c.us", texto),
     )
     app.state.agendador = agendador
     tarefa_do_agendador = asyncio.create_task(agendador.rodar())
@@ -215,6 +224,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         agendador.parar()
+        custo.definir_observador(None)
+        await run_in_threadpool(orcamento.gravar)
         tarefa_do_agendador.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await tarefa_do_agendador

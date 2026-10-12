@@ -67,6 +67,7 @@ class GeminiTranscritor:
                 ok = True
                 return texto
             finally:
+                custo.notificar_gasto(custo.custo_usd(self._modelo, uso))
                 registrar_evento(
                     logger,
                     "transcricao_chamada",

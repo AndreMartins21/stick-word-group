@@ -140,6 +140,7 @@ class MemoryBanco:
         self._pendentes: dict[str, datetime] = {}
         self._grupos_sem_lembrete: set[str] = set()  # desativados: o agendador os ignora
         self._ultimo_snapshot: date | None = None  # M28
+        self._uso_por_dia: dict[date, float] = {}  # M46
 
     def _meta_do_espaco(self, espaco_id: str) -> _EspacoMeta:
         return self._espacos_meta.setdefault(espaco_id, _EspacoMeta(tipo=tipo_do_espaco(espaco_id)))
@@ -265,3 +266,9 @@ class MemoryBanco:
 
     def marcar_snapshot(self, dia: date) -> None:
         self._ultimo_snapshot = dia
+
+    def obter_uso_do_dia(self, dia: date) -> float:
+        return self._uso_por_dia.get(dia, 0.0)
+
+    def somar_uso_do_dia(self, dia: date, usd: float) -> None:
+        self._uso_por_dia[dia] = self._uso_por_dia.get(dia, 0.0) + usd

@@ -202,6 +202,14 @@ class Banco(Protocol):
 
     def marcar_snapshot(self, dia: date) -> None: ...
 
+    def obter_uso_do_dia(self, dia: date) -> float:
+        """O custo estimado de IA (USD) já gasto em `dia` (fuso do aluno); 0 se não houver (M46)."""
+        ...
+
+    def somar_uso_do_dia(self, dia: date, usd: float) -> None:
+        """Soma `usd` ao gasto de `dia`, de forma atômica (M46, orçamento diário)."""
+        ...
+
 
 def tipo_do_espaco(espaco_id: str) -> str:
     return "grupo" if espaco_id.endswith("@g.us") else "privado"

@@ -55,6 +55,17 @@ LIMITE_DO_GRUPO = "⏳ This group has reached today's limit of messages for me. 
 LIMITE_DE_AUDIO = "🎙️ You've used up today's voice-message time with me. Text still works!"
 
 
+PAUSA_DE_HOJE = "⏸️ I'm taking a break from thinking for today. See you tomorrow!"
+
+
+def orcamento_do_dono(limite_usd: float) -> str:
+    """O aviso ao dono quando o orçamento diário de IA esgota (M46, ADR-0044)."""
+    return (
+        f"⏸️ Daily AI budget reached (US$ {limite_usd:.2f}). I'm pausing AI replies and reminders "
+        "until tomorrow. Raise ORCAMENTO_DIARIO_USD if this was expected."
+    )
+
+
 def texto_longo_demais(maximo: int) -> str:
     """Mensagem acima de `MAX_CARACTERES` (M40, ADR-0038): recusada sem chamar a IA."""
     return f"✂️ That message is too long for me (max {maximo} characters). Can you shorten it?"

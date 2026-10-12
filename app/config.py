@@ -31,6 +31,7 @@ _NUMERICOS = {
     "limite_pessoa_dia",
     "limite_grupo_dia",
     "limite_audio_segundos_dia",
+    "orcamento_diario_usd",
 }
 
 
@@ -70,6 +71,9 @@ class Settings(BaseSettings):
     limite_pessoa_dia: int = Field(default=150, ge=1)
     limite_grupo_dia: int = Field(default=400, ge=1)
     limite_audio_segundos_dia: int = Field(default=600, ge=1)
+    # Orçamento diário de IA (M46, ADR-0044): ao somar este custo estimado (USD) no dia, o bot
+    # pausa a IA até o dia seguinte e avisa o dono. Ajuste para ~3x o gasto médio diário esperado.
+    orcamento_diario_usd: float = Field(default=10.0, gt=0)
     bot_number: str
     user_level: NivelUsuario = "B1-B2"
     # Fuso do aluno, para distribuir os lembretes de revisão espaçada (seção 5.7, M10).

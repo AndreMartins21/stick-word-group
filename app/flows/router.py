@@ -11,7 +11,7 @@ import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import replace
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from app import messages
@@ -44,6 +44,7 @@ from app.services.audio import ServicoAudio
 from app.services.letras import LyricsProvider
 from app.services.limites import Decisao, LimitadorDeUso, Limites
 from app.services.llm import LLMError, Tutor
+from app.services.orcamento import Orcamento
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,7 @@ class Router:
         prefixo_do_grupo: str = "!",
         max_caracteres: int = MAX_CARACTERES_PADRAO,
         limites: Limites | None = None,
+        orcamento: Orcamento | None = None,
         eh_dono: Callable[[str], bool] = lambda _numero: False,
         eh_admin: Callable[[str], bool] | None = None,
         config_grupo: ConfigGrupo | None = None,
@@ -83,6 +85,9 @@ class Router:
         # M43 (ADR-0041): sem `limites` não há teto (testes e simulador); a produção passa os do
         # `Settings`.
         self._limitador = LimitadorDeUso(limites, agora) if limites is not None else None
+        # M46 (ADR-0044): esgotado o orçamento diário de IA, nada chega ao modelo até amanhã.
+        self._orcamento = orcamento
+        self._pausa_avisada: dict[str, date] = {}  # chat -> dia (fuso) em que já foi avisado
         self._eh_dono = eh_dono
         self._eh_admin = eh_admin
         self._config_grupo = config_grupo or ConfigGrupo()
@@ -136,7 +141,12 @@ class Router:
         """Limite de uso por pessoa e por grupo (M43, ADR-0041): gasta uma mensagem (e, para áudio,
         os segundos) da janela. Na primeira recusa de uma sequência avisa uma vez; depois, silêncio.
         O dono nunca é limitado. Chamado por `processar` e, para áudio, antes de transcrever."""
-        if self._limitador is None or (autor is not None and self._eh_dono(autor.numero)):
+        if autor is not None and self._eh_dono(autor.numero):
+            return True
+        if self._orcamento is not None and await bloq(self._orcamento.esgotado):
+            await self._avisar_pausa(chat_id)
+            return False
+        if self._limitador is None:
             return True
         em_grupo = chat_id.endswith("@g.us")
         pessoa = autor.numero if autor is not None else chat_id
@@ -156,6 +166,18 @@ class Router:
         if decisao.avisar:
             await self._avisar_limite(chat_id, decisao)
         return False
+
+    async def _avisar_pausa(self, chat_id: str) -> None:
+        """Um aviso por chat por pausa (o conjunto zera quando o orçamento volta)."""
+        registrar_evento(logger, "pausa_de_orcamento", espaco=id_curto(chat_id))
+        hoje = self._agora().astimezone(self._fuso).date()
+        if self._pausa_avisada.get(chat_id) == hoje:
+            return
+        self._pausa_avisada[chat_id] = hoje
+        async with self._trava(chat_id):
+            conversa = self.conversa_do(chat_id)
+            conversa.usuario_falou()
+            await conversa.enviar(messages.PAUSA_DE_HOJE)
 
     async def _avisar_limite(self, chat_id: str, decisao: Decisao) -> None:
         texto = {

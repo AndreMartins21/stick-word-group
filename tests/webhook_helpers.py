@@ -21,6 +21,7 @@ from app.repo.memory import MemoryBanco
 from app.services.fake_llm import FakeTutor
 from app.services.fake_transcricao import FakeTranscritor
 from app.services.limites import Limites
+from app.services.orcamento import Orcamento
 from tests.helpers import T0, explicacao_stall
 
 DONO = "5531999998888"
@@ -46,7 +47,9 @@ class Ambiente:
 
 
 @contextmanager
-def criar_ambiente(limites: Limites | None = None) -> Iterator[Ambiente]:
+def criar_ambiente(
+    limites: Limites | None = None, orcamento: Orcamento | None = None
+) -> Iterator[Ambiente]:
     canal = FakeChannel()
     settings = Settings(
         _env_file=None,
@@ -68,6 +71,7 @@ def criar_ambiente(limites: Limites | None = None) -> Iterator[Ambiente]:
         nivel_padrao="B1-B2",
         prefixo_do_grupo=settings.group_prefix,
         limites=limites,
+        orcamento=orcamento,
         eh_dono=settings.eh_dono,
         config_grupo=ConfigGrupo(
             limite=settings.limite_por_sessao_grupo,

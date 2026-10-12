@@ -348,6 +348,7 @@ def _gerar_com_retentativa[T: BaseModel](
             f"a IA não devolveu uma resposta válida ({schema.__name__})"
         ) from ultimo_erro
     finally:
+        custo.notificar_gasto(custo.custo_usd(modelo, uso))
         registrar_evento(
             logger,
             "llm_chamada",

@@ -7,7 +7,7 @@ tokens, da tabela pública do Gemini (confirmados em 2026-10-12)."""
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -85,6 +85,21 @@ def uso_da_resposta(resposta: Any, *, audio: bool = False) -> Uso:
         saida=int(getattr(meta, "candidates_token_count", 0) or 0),
         raciocinio=int(getattr(meta, "thoughts_token_count", 0) or 0),
     )
+
+
+_OBSERVADOR: Callable[[float], None] | None = None
+
+
+def definir_observador(observador: Callable[[float], None] | None) -> None:
+    """Quem recebe o custo (USD) de cada chamada concluída: o orçamento diário (M46, ADR-0044).
+    Um só, definido na subida do app; `None` desliga (testes)."""
+    global _OBSERVADOR
+    _OBSERVADOR = observador
+
+
+def notificar_gasto(usd: float) -> None:
+    if _OBSERVADOR is not None:
+        _OBSERVADOR(usd)
 
 
 def registrar_resposta(resposta: Any, *, audio: bool = False) -> Uso:

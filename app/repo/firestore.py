@@ -320,3 +320,12 @@ class FirestoreBanco:
 
     def marcar_snapshot(self, dia: date) -> None:
         self._db.collection("meta").document("snapshot").set({"ultimo_dia": dia.isoformat()})
+
+    def obter_uso_do_dia(self, dia: date) -> float:
+        dados = self._db.collection("uso").document(dia.isoformat()).get().to_dict()
+        return float(dados.get("usd", 0.0)) if dados else 0.0
+
+    def somar_uso_do_dia(self, dia: date, usd: float) -> None:
+        self._db.collection("uso").document(dia.isoformat()).set(
+            {"usd": firestore.Increment(usd)}, merge=True
+        )
