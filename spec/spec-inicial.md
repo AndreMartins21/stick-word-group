@@ -82,7 +82,7 @@ A VM tem só 1 GB de RAM. Crie um **swap de 2 GB**, limite a memória dos contai
 | `MAX_SEGUNDOS_AUDIO` | `.env.infra` (opcional) | Padrão `60` (M41, ADR-0039): nota de voz acima disso é recusada pela duração do payload, sem baixar |
 | `LIMITE_PESSOA_MINUTO` / `LIMITE_PESSOA_DIA` / `LIMITE_GRUPO_DIA` / `LIMITE_AUDIO_SEGUNDOS_DIA` | `.env.infra` (opcionais) | Padrão `6` / `150` / `400` / `600` (M43, ADR-0041): mensagens por pessoa por minuto e por dia, mensagens por grupo por dia e segundos de áudio por pessoa por dia; o dono não é limitado |
 | `GEMINI_THINKING_LEVEL` | `.env.infra` (opcional) | Padrão `minimal` (M44, ADR-0042): `thinking_level` do Gemini 3.x (cobrado como saída); vazio usa o padrão do modelo; se o modelo recusar, o bot segue sem ele |
-| `ORCAMENTO_DIARIO_USD` | `.env.infra` (opcional) | Padrão `10` (M46, ADR-0044): ao somar este custo estimado de IA no dia (fuso do aluno), o bot pausa a IA e os lembretes até o dia seguinte e avisa o dono uma vez; o dono segue atendido |
+| `ORCAMENTO_DIARIO_USD` | `.env.infra` (opcional) | Padrão `5` (M46, ADR-0044; padrão de US$ 10 para US$ 5 no ADR-0047): ao somar este custo estimado de IA no dia (fuso do aluno), o bot pausa a IA e os lembretes até o dia seguinte e avisa o dono uma vez; o dono segue atendido |
 | `MAX_FILA_POR_CHAT` / `MAX_PROCESSAMENTOS` | `.env.infra` (opcionais) | Padrão `3` / `4` (M47, ADR-0045): mensagens de um chat esperando a vez (as demais são descartadas em silêncio) e chats processando ao mesmo tempo |
 | `CONTACT_EMAIL` | `.env.infra` (opcional) | E-mail que o aviso "você não tem um plano" mostra a quem não está na lista (M15) |
 | `BOT_NUMBER` | `.env.infra` | Número Vivo do bot, só dígitos (informativo/logs) |
@@ -852,6 +852,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M46 | Orçamento diário de IA (seções 4/5.6/7.1/12): `Orcamento` soma o `custo_usd` das chamadas por dia no fuso do aluno, `Banco.obter_uso_do_dia`/`somar_uso_do_dia` (`uso/{dia}`), pausa a IA e os lembretes ao atingir `ORCAMENTO_DIARIO_USD`, avisa o dono uma vez (ADR-0044) | `make check` passa; ao esgotar, cada chat recebe um aviso e a IA não é chamada; o dono segue atendido; o agendador não dispara lembretes e avisa o dono uma vez; o dia vira no fuso do aluno; um restart continua do gasto gravado |
 | M47 | Fila limitada (seção 5.6, ADR-0045): `MAX_FILA_POR_CHAT` (3) e `MAX_PROCESSAMENTOS` (4) no `Router`, evento `fila_cheia` (ADR-0045) | `make check` passa; com o chat já com 3 mensagens esperando, as seguintes são descartadas em silêncio e registradas; chats diferentes não dividem a fila; no máximo 4 chats processam ao mesmo tempo, sem perder mensagens; o contador volta a zero mesmo com erro |
 | M48 | Cache de acesso (seção 7.1, ADR-0046): `FirestoreBanco` com validade de 60 s para `listar_admins` e `grupo_esta_ativo` (invalidados pelas mutações) e cache permanente do LID resolvido (ADR-0046) | `make check` passa; 5 chamadas seguidas leem o Firestore uma vez; adicionar/remover admin e ativar/desativar grupo invalidam; o LID resolvido não é lido de novo e o desconhecido não é cacheado |
+| M49 | Orçamento de US$ 5 e limites no deploy (seções 4/10.9): padrão `ORCAMENTO_DIARIO_USD=5`; `deploy.sh` e `ci.yml` levam os limites do M40-M48 e `GEMINI_THINKING_LEVEL` ao `.env` da VM (ADR-0047) | `make check` passa; `.env` renderizado traz as variáveis com os padrões; vazio na GitHub Variable usa o padrão; sem a variável, o orçamento diário é US$ 5 |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 
@@ -933,6 +934,8 @@ Mostre também como ver a senha do painel **localmente e só quando eu pedir** (
 
 ### 10.8 Custos (para você respeitar)
 A VM `e2-micro` com disco standard de 30 GB em `us-central1` está no nível gratuito. O Gemini no Vertex AI é pago por uso (centavos neste volume), coberto pelos créditos do trial. Os créditos do trial **não** pagam modelos de parceiros (ex.: Claude no Vertex), por isso ele não é opção aqui. O IP externo **não** está: custa alguns dólares por mês, coberto pelos créditos do trial. Firestore, Storage e Secret Manager ficam nas cotas gratuitas. O Cloud Text-to-Speech (M23) também: 1M de caracteres por mês em Neural2 (4M em Standard/WaveNet), e o cache evita sintetizar o mesmo texto duas vezes. Não crie Cloud NAT, balanceador, IP estático reservado nem máquinas maiores.
+
+**Limites no deploy (M49, ADR-0047):** `infra/deploy.sh` renderiza no `.env` da VM `MAX_CARACTERES`, `MAX_SEGUNDOS_AUDIO`, `LIMITE_*`, `ORCAMENTO_DIARIO_USD`, `MAX_FILA_POR_CHAT`, `MAX_PROCESSAMENTOS` e `GEMINI_THINKING_LEVEL`, vindos de GitHub Variables homônimas (opcionais; vazio usa o padrão).
 
 **Alertas de custo (M45, ADR-0043):** `infra/setup_orcamento.sh` cria o Budget `vocabot-mensal` (`ORCAMENTO_MENSAL_USD`, padrão 30) com alertas em 50/90/100%; só avisa, não corta.
 

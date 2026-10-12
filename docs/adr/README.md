@@ -56,6 +56,7 @@ operacional: numeração, status e o índice.
 | [0044](0044-orcamento-diario-de-ia-como-disjuntor-global.md) | Orçamento diário de IA como disjuntor global, persistido no Firestore | Aceito | 2026-10-12 |
 | [0045](0045-fila-por-chat-com-teto-e-vagas-globais-de-processamento.md) | Fila por chat com teto e vagas globais de processamento | Aceito | 2026-10-12 |
 | [0046](0046-cache-curto-das-checagens-de-acesso.md) | Cache curto em memória das checagens de acesso do Firestore (admin, grupo ativo, LID) | Aceito | 2026-10-12 |
+| [0047](0047-orcamento-de-5-dolares-e-limites-no-deploy.md) | Orçamento diário padrão de US$ 5 e limites de uso renderizados pelo deploy | Aceito | 2026-10-12 |
 
 ## Quando escrever um
 

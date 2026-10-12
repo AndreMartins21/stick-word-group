@@ -4,7 +4,7 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-# shellcheck source=infra/config.sh
+# shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/config.sh"
 
 : "${ALLOWED_NUMBER:?defina ALLOWED_NUMBER em infra/.env.infra}"
@@ -34,6 +34,17 @@ chmod 700 "$TMP"
   printf 'GROUP_PREFIX=%s\n' "${GROUP_PREFIX:-}"
   printf 'LIMITE_POR_SESSAO_GRUPO=%s\n' "${LIMITE_POR_SESSAO_GRUPO:-}"
   printf 'TIMEOUT_MARCACAO_HORAS=%s\n' "${TIMEOUT_MARCACAO_HORAS:-}"
+  # Limites de uso e de custo (M40-M48): sem valor, o padrão do código (os mesmos daqui).
+  printf 'MAX_CARACTERES=%s\n' "${MAX_CARACTERES:-500}"
+  printf 'MAX_SEGUNDOS_AUDIO=%s\n' "${MAX_SEGUNDOS_AUDIO:-60}"
+  printf 'LIMITE_PESSOA_MINUTO=%s\n' "${LIMITE_PESSOA_MINUTO:-6}"
+  printf 'LIMITE_PESSOA_DIA=%s\n' "${LIMITE_PESSOA_DIA:-150}"
+  printf 'LIMITE_GRUPO_DIA=%s\n' "${LIMITE_GRUPO_DIA:-400}"
+  printf 'LIMITE_AUDIO_SEGUNDOS_DIA=%s\n' "${LIMITE_AUDIO_SEGUNDOS_DIA:-600}"
+  printf 'ORCAMENTO_DIARIO_USD=%s\n' "${ORCAMENTO_DIARIO_USD:-5}"
+  printf 'MAX_FILA_POR_CHAT=%s\n' "${MAX_FILA_POR_CHAT:-3}"
+  printf 'MAX_PROCESSAMENTOS=%s\n' "${MAX_PROCESSAMENTOS:-4}"
+  printf 'GEMINI_THINKING_LEVEL=%s\n' "${GEMINI_THINKING_LEVEL:-minimal}"
   printf 'BOT_NUMBER=%s\n' "$BOT_NUMBER"
   printf 'USER_LEVEL=%s\n' "${USER_LEVEL:-B1-B2}"
   printf 'TIMEZONE=%s\n' "${TIMEZONE:-America/Sao_Paulo}"
