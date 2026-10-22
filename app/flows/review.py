@@ -87,10 +87,12 @@ async def alunos_elegiveis(d: Deps, *, atualizar: bool) -> list[tuple[str, Membr
                 presentes = [n for n in numeros if not eh_o_bot(d, n)]
                 await bloq(cadastrar_novos, d, presentes)
     membros = await bloq(d.repo.listar_membros)
+    staff = await bloq(lambda: {n for n, _ in membros if d.eh_staff(n)})
     return [
         (numero, membro)
         for numero, membro in membros
         if membro.papel == "aluno"
+        and numero not in staff
         and not eh_o_bot(d, numero)
         and (presentes is None or numero_esta_na_lista(numero, presentes))
     ]

@@ -215,7 +215,8 @@ apelidos em PT-BR que a spec sempre teve (`/ajuda`, `/lista`, `/pendentes`, `/pr
 - **Comandos de acesso (M15, ADR-0018), escondidos do `/help`:** `/groups` (dono e admins) lista os grupos
   ativos e os pendentes, com o nome e as horas que faltam para o bot sair, e `/groups off N` desativa o
   grupo N da lista; `/admin`, `/admin add NUMERO` e `/admin remove NUMERO` (só o dono) gerenciam os
-  admins. Para quem não pode usá-los, valem como qualquer comando desconhecido.
+  admins; `/teachers`, `/teachers add NUMERO` e `/teachers remove NUMERO` (admins e dono, M57, ADR-0055)
+  gerenciam os professores globais. Para quem não pode usá-los, valem como qualquer comando desconhecido.
 
 ### 5.2b Grupos de turma (M16, ADR-0019)
 
@@ -241,8 +242,8 @@ deduplicação e do `sendSeen`). Mídia é ignorada, **exceto nota de voz que ci
   bot com a palavra; com a palavra aberta, o mesmo termo com `|` troca o sentido, como no privado — M31), `!list [página]` (palavras da turma, mesma regra do `/list`), `!practice [palavra|número]`,
   `!review` (M35: começa uma revisão diária na hora), `!daily [19h | on | off | weekends on|off | size N|auto]`, (M35, ADR-0033: qualquer membro vê; só admin do bot ou o dono muda; `!reminder` virou apelido que aponta para ele), `!weekly [fri 13h | on | off | size N|auto | now]` (M36, ADR-0034: mesma permissão; `now` começa o desafio na hora), `!level [A1-A2|A2-B1|B1-B2|B2-C1|C1-C2|C2]` (M33, ADR-0031: sem argumento qualquer membro vê o nível da turma; com argumento só professor ou dono muda, e aluno recebe a recusa), `!group` (nível, palavras,
   vencidas, lembretes e os membros com o papel, só nomes e sem menção) e `!help` (só os comandos do
-  grupo). `!teacher`/`!student` (um professor da turma ou o dono) mudam o papel, escondidos do `!help`;
-  os alvos vêm das menções do payload ou do número escrito no texto.
+  grupo). `!teacher`/`!student` (M57, ADR-0055: só admin do bot ou o dono; antes, qualquer professor da turma) mudam o papel, escondidos do `!help`;
+  `!teacher` vale em **todos** os grupos (coleção `professores/`), `!student` tira de todos; os alvos vêm das menções do payload ou do número escrito no texto. Staff (dono, admin do bot, professor global ou local) nunca é marcado no desafio semanal e aparece como `teacher` no `!group`.
 - **Dentro de uma atividade:** marcar o bot com `2`, `3`, a frase etc. responde, pela mesma máquina de
   estados do privado; `!1`, `!2`, `!3` e `!texto` (e com `/`) continuam valendo. Na revisão, a marcação
   responde, `skip` pula a palavra, `skipall` (ou `0`/`stop`) encerra.
@@ -714,6 +715,7 @@ espacos/{grupo}/respostas/{auto}  { entry, autor_id, marcado, qualidade, criado_
                            # M35: profile/me ganha diaria_ligada, diaria_hora, diaria_minuto, diaria_fim_de_semana,
                            # proxima_diaria, revisoes_sem_resposta; session/current ganha revisao_puladas;
                            # no grupo `proximo_tick` espelha `proxima_diaria`; marcacao_expira_em = fechamento por inatividade (3h)
+professores/{numero}       { adicionado_em, adicionado_por }          # M57 (ADR-0055): professores globais, valem em todos os grupos
 lids/{lid}                 { numero }                   # cache LID -> número (seção 8.2), evita consultar o WAHA a cada mensagem
 meta/snapshot               { ultimo_dia }              # M28: último dia (AAAA-MM-DD) do snapshot diário de métricas
 ```
@@ -862,6 +864,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M54 | `!delete` restrito (seção 5.2b, ADR-0052): `commands.apagar(pode_apagar=)`; no grupo só o autor da entrada (`Entry.autor_id`), admin do bot ou o dono apagam | `make check` passa; outro aluno recebe a recusa e a palavra fica; admin e dono apagam qualquer palavra; entrada sem autor só o admin apaga; o privado não muda |
 | M55 | Jitter nos lembretes do grupo (seção 5.2b/5.7, ADR-0053): `agenda_grupo.jitter_do_espaco` (-20 a +20 min, fixo por grupo e tipo), `proxima_diaria`/`proxima_semanal` com `jitter`, `Agendador(jitter_do_grupo=)`; `!daily`/`!weekly`/`!group` avisam a janela | `make check` passa; o próximo horário do grupo cai entre 18:40 e 19:20 para 19h e é sempre o mesmo para o mesmo grupo; o dia útil escolhido não muda; os textos dizem "around 19:00 (may arrive up to 20 min earlier or later)" |
 | M56 | Contingência do número (seção 10.6b, ADR-0054): `infra/setup_alerta_sessao.sh` (alerta por e-mail quando `waha_status` vai a `FAILED`/`STOPPED`/`SCAN_QR_CODE`) e `docs/runbooks/banimento-do-numero.md` | `make check` passa; `DRY_RUN=1 ALERTA_EMAIL=... bash infra/setup_alerta_sessao.sh` mostra o canal e a política em JSON válido; o runbook cobre re-parear, número reserva, `BOT_NUMBER` e o aviso às turmas |
+| M57 | Professor global (seções 5.2/5.2b/7.1, ADR-0055): coleção `professores/`, `Banco.listar/adicionar/remover_professor`, `!teacher`/`!student` só de admin ou dono e valem em todos os grupos, `Deps.eh_staff`, admin e professor fora do desafio semanal, `/teachers` no privado | `make check` passa; `!teacher` num grupo tira a pessoa do rodízio do semanal de outro grupo; professor e aluno não promovem; `!student` tira de todos; admin do bot nunca é marcado; `/teachers` só para admin/dono; contrato do `Banco` (memória e emulador) |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 

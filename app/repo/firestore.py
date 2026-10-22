@@ -192,6 +192,7 @@ class FirestoreBanco:
         self._relogio = relogio
         self._validade = validade_do_cache
         self._cache_admins: tuple[float, list[str]] | None = None
+        self._cache_professores: tuple[float, list[str]] | None = None  # M57
         self._cache_grupos: dict[str, tuple[float, bool]] = {}
         self._cache_lids: dict[str, str] = {}
 
@@ -259,6 +260,36 @@ class FirestoreBanco:
             return False
         documento.delete()
         self._cache_admins = None
+        return True
+
+    def listar_professores(self) -> list[str]:
+        agora = self._relogio()
+        if (
+            self._cache_professores is not None
+            and agora - self._cache_professores[0] < self._validade
+        ):
+            return list(self._cache_professores[1])
+        documentos = self._db.collection("professores").order_by("adicionado_em").stream()
+        professores = [d.id for d in documentos]
+        self._cache_professores = (agora, professores)
+        return list(professores)
+
+    def adicionar_professor(self, numero: str, *, por: str, agora: datetime) -> bool:
+        try:
+            self._db.collection("professores").document(numero).create(
+                {"adicionado_em": agora, "adicionado_por": por}
+            )
+        except AlreadyExists:
+            return False
+        self._cache_professores = None
+        return True
+
+    def remover_professor(self, numero: str) -> bool:
+        documento = self._db.collection("professores").document(numero)
+        if not documento.get().exists:
+            return False
+        documento.delete()
+        self._cache_professores = None
         return True
 
     def _ler_grupo_ativo(self, grupo_id: str) -> bool:

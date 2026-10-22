@@ -125,7 +125,7 @@ async def tratar(
         return await conversar(d, sessao, perfil, texto)
 
     if comando in _PAPEIS and not marcado:
-        return await _papel(d, sessao, autor, comando, argumento, eh_dono)
+        return await _papel(d, sessao, autor, comando, argumento, eh_admin or eh_dono, eh_dono)
 
     if estado == Estado.WEEKLY_QUIZ:
         # No desafio semanal (M36) `1`/`2`/`3`/`skip`/`skipall` são do menu (máquina de estados);
@@ -265,16 +265,35 @@ def _achar_membro(d: Deps, numero: str) -> tuple[str, Membro | None]:
     return numero, None
 
 
-def _definir_papel(d: Deps, numero: str, papel: Papel) -> Membro:
+def _definir_papel(d: Deps, numero: str, papel: Papel, por: str) -> Membro:
+    """Grava o papel no grupo e no cadastro global de professores (M57, ADR-0055): quem vira
+    professor vale em todos os grupos; `!student` tira de todos."""
     chave, membro = _achar_membro(d, numero)
     novo = (membro or Membro(entrou_em=d.agora())).model_copy(update={"papel": papel})
     d.repo.salvar_membro(chave, novo)
+    if d.banco is not None:
+        existente = next(
+            (n for n in d.banco.listar_professores() if numero_esta_na_lista(numero, [n])), None
+        )
+        if papel == "professor" and existente is None:
+            d.banco.adicionar_professor(numero, por=por, agora=d.agora())
+        elif papel == "aluno" and existente is not None:
+            d.banco.remover_professor(existente)
     return novo
 
 
-def _pode_gerir(autor: Autor, membro: Membro | None, eh_dono: Callable[[str], bool]) -> bool:
-    """Professor da turma ou dono: quem muda papéis e o nível."""
-    return eh_dono(autor.numero) or (membro is not None and membro.papel == "professor")
+def _eh_professor(d: Deps, numero: str, membro: Membro | None) -> bool:
+    """Professor desta turma ou professor global (M57)."""
+    if membro is not None and membro.papel == "professor":
+        return True
+    return d.banco is not None and numero_esta_na_lista(numero, d.banco.listar_professores())
+
+
+def _pode_gerir(
+    d: Deps, autor: Autor, membro: Membro | None, eh_dono: Callable[[str], bool]
+) -> bool:
+    """Professor (da turma ou global) ou dono: quem muda o nível."""
+    return eh_dono(autor.numero) or _eh_professor(d, autor.numero, membro)
 
 
 async def _nivel(
@@ -283,7 +302,7 @@ async def _nivel(
     """`!level`: qualquer membro vê o nível da turma; só professor ou dono o muda (M33)."""
     if argumento:
         quem = await bloq(d.repo.obter_membro, autor.numero)
-        if not _pode_gerir(autor, quem, eh_dono):
+        if not await bloq(_pode_gerir, d, autor, quem, eh_dono):
             await d.conversa.enviar(messages.nivel_so_professor(d.p))
             return
     await commands.definir_nivel(d, perfil, argumento)
@@ -363,12 +382,13 @@ async def _papel(
     autor: Autor,
     comando: str,
     argumento: str,
+    eh_admin: Callable[[str], bool],
     eh_dono: Callable[[str], bool],
 ) -> Sessao:
-    """`!teacher`/`!student`: só um professor da turma ou o dono. Para qualquer outra pessoa o
-    comando não existe: responde como a qualquer outro texto fora de comando (a ajuda)."""
-    quem = await bloq(d.repo.obter_membro, autor.numero)
-    if not _pode_gerir(autor, quem, eh_dono):
+    """`!teacher`/`!student`: só admin do bot ou o dono (M57, ADR-0055; era qualquer professor da
+    turma). Para qualquer outra pessoa o comando não existe: responde como a qualquer outro texto
+    fora de comando (a ajuda)."""
+    if not (await bloq(eh_dono, autor.numero) or await bloq(eh_admin, autor.numero)):
         await d.conversa.enviar(messages.ajuda_do_grupo(d.p))
         return sessao
     alvos = _alvos(autor, argumento)
@@ -377,7 +397,7 @@ async def _papel(
         return sessao
     papel: Papel = "professor" if _PAPEIS[comando] == "professor" else "aluno"
     for numero in alvos:
-        membro = await bloq(_definir_papel, d, numero, papel)
+        membro = await bloq(_definir_papel, d, numero, papel, autor.numero)
         await d.conversa.enviar(messages.papel_alterado(membro.nome, papel))
     return sessao
 
@@ -393,6 +413,7 @@ async def _perfil_do_grupo(d: Deps, perfil: Profile) -> None:
     for r in respostas:
         por_autor[r.autor_id] = por_autor.get(r.autor_id, 0) + 1
 
+    staff = await bloq(lambda: {n for n, _ in membros if d.eh_staff(n)})
     linhas: list[tuple[str, str, int]] = []
     sem_nome = 0
     for numero, membro in membros:
@@ -401,7 +422,9 @@ async def _perfil_do_grupo(d: Deps, perfil: Profile) -> None:
         else:
             sem_nome += 1
             nome = f"Student {sem_nome}"
-        linhas.append((nome, membro.papel, por_autor.get(numero, 0)))
+        # M57: dono, admin e professor global também são staff aqui (nunca marcados no semanal).
+        papel = "professor" if membro.papel == "professor" or numero in staff else "aluno"
+        linhas.append((nome, papel, por_autor.get(numero, 0)))
 
     if not perfil.diaria_ligada:
         lembretes = f"off — turn it on with {d.p}daily on"

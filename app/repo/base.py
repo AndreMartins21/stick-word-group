@@ -162,6 +162,17 @@ class Banco(Protocol):
 
     def remover_admin(self, numero: str) -> bool: ...
 
+    def listar_professores(self) -> list[str]:
+        """Os professores globais (M57, ADR-0055): valem em todos os grupos. Na ordem em que
+        entraram."""
+        ...
+
+    def adicionar_professor(self, numero: str, *, por: str, agora: datetime) -> bool:
+        """`False` se o número já é professor."""
+        ...
+
+    def remover_professor(self, numero: str) -> bool: ...
+
     def grupo_esta_ativo(self, grupo_id: str) -> bool:
         """Só o que foi ativado por admin; quem confere `ALLOWED_GROUPS` é o webhook."""
         ...

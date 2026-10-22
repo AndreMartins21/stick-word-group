@@ -137,6 +137,7 @@ class MemoryBanco:
         self._processadas: set[str] = set()
         self._lids: dict[str, str] = {}
         self._admins: dict[str, tuple[str, datetime]] = {}  # numero -> (por, agora)
+        self._professores: dict[str, tuple[str, datetime]] = {}  # M57: numero -> (por, agora)
         self._grupos_ativos: dict[str, GrupoAtivo] = {}
         self._pendentes: dict[str, datetime] = {}
         self._grupos_sem_lembrete: set[str] = set()  # desativados: o agendador os ignora
@@ -203,6 +204,18 @@ class MemoryBanco:
 
     def remover_admin(self, numero: str) -> bool:
         return self._admins.pop(numero, None) is not None
+
+    def listar_professores(self) -> list[str]:
+        return [n for n, _ in sorted(self._professores.items(), key=lambda par: par[1][1])]
+
+    def adicionar_professor(self, numero: str, *, por: str, agora: datetime) -> bool:
+        if numero in self._professores:
+            return False
+        self._professores[numero] = (por, agora)
+        return True
+
+    def remover_professor(self, numero: str) -> bool:
+        return self._professores.pop(numero, None) is not None
 
     def grupo_esta_ativo(self, grupo_id: str) -> bool:
         return grupo_id in self._grupos_ativos

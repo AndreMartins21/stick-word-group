@@ -142,7 +142,7 @@ def _comando_privado(texto: str, prefixo: str = "!") -> tuple[str, list[str]] | 
             break
     else:
         return None
-    return (comando, partes[1:]) if comando in {"groups", "grupos", "admin"} else None
+    return (comando, partes[1:]) if comando in {"groups", "grupos", "admin", "teachers"} else None
 
 
 def eh_comando_de_admin(texto: str, prefixo: str = "!") -> bool:
@@ -162,6 +162,8 @@ async def comando_privado(a: Acesso, texto: str, numero: str) -> str | None:
         return await bloq(_admin, a, argumentos, so_digitos(numero))
     if not await bloq(eh_admin, a, numero):
         return None
+    if comando == "teachers":
+        return await bloq(_professores, a, argumentos, so_digitos(numero))
     return await _grupos(a, argumentos)
 
 
@@ -183,6 +185,27 @@ def _admin(a: Acesso, argumentos: list[str], dono: str) -> str:
     if existente is None or not a.banco.remover_admin(existente):
         return messages.ADMIN_NAO_E_ADMIN
     return messages.ADMIN_REMOVIDO
+
+
+def _professores(a: Acesso, argumentos: list[str], por: str) -> str:
+    """`/teachers [add|remove NUMERO]` (M57, ADR-0055): os professores valem em todos os grupos,
+    nunca são marcados no desafio semanal e não ativam grupos."""
+    atuais = a.banco.listar_professores()
+    if not argumentos:
+        return messages.professores_lista(atuais)
+    acao = normalizar(argumentos[0])
+    alvo = so_digitos(" ".join(argumentos[1:]))
+    if acao not in {"add", "remove"} or len(alvo) < _MIN_DIGITOS:
+        return messages.PROFESSORES_USO
+    if acao == "add":
+        if numero_esta_na_lista(alvo, atuais):
+            return messages.PROFESSOR_JA_E
+        a.banco.adicionar_professor(alvo, por=por, agora=a.agora())
+        return messages.PROFESSOR_ADICIONADO
+    existente = next((n for n in atuais if numero_esta_na_lista(alvo, [n])), None)
+    if existente is None or not a.banco.remover_professor(existente):
+        return messages.PROFESSOR_NAO_E
+    return messages.PROFESSOR_REMOVIDO
 
 
 async def _grupos(a: Acesso, argumentos: list[str]) -> str:

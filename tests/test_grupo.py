@@ -567,9 +567,8 @@ async def test_teacher_com_mencao_do_payload_e_nome_do_membro_ja_conhecido() -> 
     assert resposta == messages.papel_alterado("Bia", "professor")
 
 
-async def test_um_professor_promove_e_rebaixa_outros() -> None:
-    m = _grupo()
-    await m.diz_no_grupo(Autor(DONO_NUMERO, "Dono"), f"!teacher {ANA.numero}")
+async def test_um_admin_promove_e_rebaixa_outros() -> None:
+    m = montar(tutor=_tutor(), admins=(ANA.numero,))
 
     await m.diz_no_grupo(ANA, f"!teacher {BIA.numero}")
     assert m.banco.do_espaco(GRUPO).obter_membro(BIA.numero).papel == "professor"  # type: ignore[union-attr]

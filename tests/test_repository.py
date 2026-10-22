@@ -750,3 +750,19 @@ def test_resolver_slug_reaproveita_o_slug_quando_a_traducao_so_muda_de_redacao(
 )
 def test_mesma_traducao_ignora_redacao_mas_nao_o_sentido(a: str, b: str, esperado: bool) -> None:
     assert mesma_traducao(a, b) is esperado
+
+
+# --- M57: professores globais (ADR-0055) -------------------------------------------------------
+
+
+def test_professores_adicionar_listar_e_remover(banco: Banco) -> None:
+    assert banco.listar_professores() == []
+
+    assert banco.adicionar_professor("5531999998888", por="5511988887777", agora=T0) is True
+    assert banco.adicionar_professor("5521977776666", por="5511988887777", agora=T1) is True
+    assert banco.adicionar_professor("5531999998888", por="5511988887777", agora=T1) is False
+
+    assert banco.listar_professores() == ["5531999998888", "5521977776666"]
+    assert banco.remover_professor("5531999998888") is True
+    assert banco.remover_professor("5531999998888") is False
+    assert banco.listar_professores() == ["5521977776666"]

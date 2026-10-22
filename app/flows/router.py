@@ -16,6 +16,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from app import messages
+from app.channel.parser import numero_esta_na_lista
 from app.domain.models import (
     Estado,
     NivelUsuario,
@@ -137,7 +138,16 @@ class Router:
             autor=autor,
             chat_id=chat_id,
             grupo_cfg=self._config_grupo,
+            eh_staff=self._eh_staff,
+            banco=self._banco,
         )
+
+    def _eh_staff(self, numero: str) -> bool:
+        """Dono, admin do bot ou professor global (M57, ADR-0055). Síncrono (lê o banco, com o
+        cache curto do ADR-0046)."""
+        if self._eh_dono(numero) or (self._eh_admin is not None and self._eh_admin(numero)):
+            return True
+        return numero_esta_na_lista(numero, self._banco.listar_professores())
 
     async def responder_avulso(self, chat_id: str, texto: str) -> None:
         """Uma resposta fixa (sem IA e sem mexer na sessão), com o mesmo ritmo humano e o mesmo

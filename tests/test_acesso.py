@@ -359,3 +359,36 @@ def test_ativar_grupo_ja_ativo_ou_negado_nao_registra_evento(
         assert ativar_grupo(a, GRUPO, ALUNO, None) is Resultado.NAO_ADMIN
 
     assert eventos(caplog.records) == []
+
+
+# --- /teachers (admin ou dono; M57, ADR-0055) -------------------------------------------------
+
+
+async def test_admin_lista_adiciona_e_remove_professores() -> None:
+    a, banco, _ = _acesso()
+
+    assert await comando_privado(a, "/teachers", ADMIN) == messages.professores_lista([])
+    assert (
+        await comando_privado(a, f"/teachers add {ALUNO}", ADMIN) == messages.PROFESSOR_ADICIONADO
+    )
+    assert banco.listar_professores() == [ALUNO]
+    assert await comando_privado(a, f"/teachers add {ALUNO}", DONO) == messages.PROFESSOR_JA_E
+    lista = await comando_privado(a, "/teachers", DONO)
+    assert lista is not None and ALUNO in lista
+    assert (
+        await comando_privado(a, f"/teachers remove {ALUNO}", ADMIN) == messages.PROFESSOR_REMOVIDO
+    )
+    assert await comando_privado(a, f"/teachers remove {ALUNO}", ADMIN) == messages.PROFESSOR_NAO_E
+    assert banco.listar_professores() == []
+
+
+async def test_teachers_rejeita_lixo_e_nao_admin_nao_usa() -> None:
+    a, banco, _ = _acesso()
+
+    assert await comando_privado(a, "/teachers add 123", ADMIN) == messages.PROFESSORES_USO
+    assert (
+        await comando_privado(a, "/teachers fly 5521977776666", ADMIN) == messages.PROFESSORES_USO
+    )
+    assert await comando_privado(a, f"/teachers add {ALUNO}", ALUNO) is None
+    assert banco.listar_professores() == []
+    assert eh_comando_de_admin("/teachers")

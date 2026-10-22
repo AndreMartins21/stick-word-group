@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from app.domain.models import Sense, SentidoSalvo, Sessao
 from app.domain.rodizio import Candidato
 from app.flows.conversa import Conversa
-from app.repo.base import Repository
+from app.repo.base import Banco, Repository
 from app.services.audio import ServicoAudio
 from app.services.letras import LyricsProvider
 from app.services.llm import Tutor
@@ -63,6 +63,9 @@ class Deps:
     chat_id: str = ""  # o espaço desta mensagem
     grupo_cfg: ConfigGrupo = field(default_factory=ConfigGrupo)  # M17
     so_ingles: bool = False  # M34: grupo de B1-B2 para cima não vê português
+    # M57 (ADR-0055): dono, admin do bot ou professor global — nunca marcado no desafio semanal.
+    eh_staff: Callable[[str], bool] = lambda _numero: False
+    banco: Banco | None = None  # M57: a raiz, para os professores globais (`!teacher`/`!student`)
 
     @property
     def em_grupo(self) -> bool:

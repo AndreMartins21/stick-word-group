@@ -828,6 +828,24 @@ def admin_lista(numeros: Sequence[str]) -> str:
     return "\n".join(linhas)
 
 
+PROFESSORES_USO = "Use /teachers add 5531999998888 or /teachers remove 5531999998888 (digits only, with country and area code)."
+PROFESSOR_JA_E = "That number is already a teacher."
+PROFESSOR_NAO_E = "That number isn't a teacher."
+PROFESSOR_ADICIONADO = (
+    "✅ Added as a teacher in every group. Teachers are never tagged in the weekly challenge."
+)
+PROFESSOR_REMOVIDO = "✅ Removed. They're a regular student again in every group."
+
+
+def professores_lista(numeros: Sequence[str]) -> str:
+    if not numeros:
+        return "🎓 No teachers yet. Add one with /teachers add 5531999998888."
+    linhas = [f"🎓 *Teachers* ({len(numeros)})"]
+    linhas += [f"• {n}" for n in numeros]
+    linhas.append("Add one with /teachers add 5531999998888.")
+    return "\n".join(linhas)
+
+
 GRUPOS_USO = "Use /groups to see the groups, or /groups off 1 to turn one off."
 GRUPO_NAO_EXISTE = "There's no active group with that number. Use /groups to see them."
 
