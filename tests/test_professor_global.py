@@ -100,3 +100,25 @@ async def test_group_mostra_o_professor_global_como_teacher() -> None:
 
     assert "• Caio (teacher)" in resposta
     assert "• Ana (student)" in resposta
+
+
+async def test_teacher_repetido_remove_o_professor_de_todos_os_grupos() -> None:
+    m = _turma()
+
+    (promovida,) = await m.diz_no_grupo(DONO, f"!teacher {ANA.numero}")
+    (rebaixada,) = await m.diz_no_grupo(DONO, f"!teacher {ANA.numero}")
+
+    assert promovida == messages.papel_alterado("Ana", "professor")
+    assert rebaixada == messages.papel_alterado("Ana", "aluno")
+    assert m.banco.listar_professores() == []
+    assert ANA.numero in await _elegiveis(m)
+    await m.diz_no_grupo(DONO, f"!teacher {ANA.numero}")  # e de novo promove
+    assert m.banco.listar_professores() == [ANA.numero]
+
+
+async def test_teacher_repetido_tambem_rebaixa_o_professor_so_local() -> None:
+    m = _turma()  # Carla é professora só neste grupo (papel antigo)
+
+    (resposta,) = await m.diz_no_grupo(DONO, f"!teacher {CARLA.numero}")
+
+    assert resposta == messages.papel_alterado("Carla", "aluno")

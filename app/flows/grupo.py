@@ -395,11 +395,20 @@ async def _papel(
     if not alvos:
         await d.conversa.enviar(messages.papel_uso(comando, d.p))
         return sessao
-    papel: Papel = "professor" if _PAPEIS[comando] == "professor" else "aluno"
     for numero in alvos:
+        papel = await bloq(_papel_a_aplicar, d, numero, comando)
         membro = await bloq(_definir_papel, d, numero, papel, autor.numero)
         await d.conversa.enviar(messages.papel_alterado(membro.nome, papel))
     return sessao
+
+
+def _papel_a_aplicar(d: Deps, numero: str, comando: str) -> Papel:
+    """`!student` sempre rebaixa. `!teacher` alterna (M59, ADR-0057): quem já é professor (global ou
+    deste grupo) volta a aluno em todos os grupos."""
+    if _PAPEIS[comando] == "aluno":
+        return "aluno"
+    _, membro = _achar_membro(d, numero)
+    return "aluno" if _eh_professor(d, numero, membro) else "professor"
 
 
 # --- !group -----------------------------------------------------------------------------------

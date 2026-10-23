@@ -145,7 +145,7 @@ def _comando_privado(texto: str, prefixo: str = "!") -> tuple[str, list[str]] | 
         return None
     return (
         (comando, partes[1:])
-        if comando in {"groups", "grupos", "admin", "teachers", "ranking"}
+        if comando in {"groups", "grupos", "admin", "teachers", "teacher", "ranking"}
         else None
     )
 
@@ -170,7 +170,7 @@ async def comando_privado(a: Acesso, texto: str, numero: str) -> str | list[str]
         return None
     if comando == "ranking":
         return await _ranking(a, argumentos)
-    if comando == "teachers":
+    if comando in {"teachers", "teacher"}:
         return await bloq(_professores, a, argumentos, so_digitos(numero))
     return await _grupos(a, argumentos)
 
@@ -202,9 +202,17 @@ def _professores(a: Acesso, argumentos: list[str], por: str) -> str:
     if not argumentos:
         return messages.professores_lista(atuais)
     acao = normalizar(argumentos[0])
-    alvo = so_digitos(" ".join(argumentos[1:]))
-    if acao not in {"add", "remove"} or len(alvo) < _MIN_DIGITOS:
+    if acao not in {"add", "remove"}:
+        texto = " ".join(argumentos)  # `/teachers NUMERO` (M59): só dígitos e formatação
+        if re.search(r"[^\d\s+().-]", texto):
+            return messages.PROFESSORES_USO
+        acao, alvo = "alternar", so_digitos(texto)
+    else:
+        alvo = so_digitos(" ".join(argumentos[1:]))
+    if len(alvo) < _MIN_DIGITOS:
         return messages.PROFESSORES_USO
+    if acao == "alternar":
+        acao = "remove" if numero_esta_na_lista(alvo, atuais) else "add"
     if acao == "add":
         if numero_esta_na_lista(alvo, atuais):
             return messages.PROFESSOR_JA_E

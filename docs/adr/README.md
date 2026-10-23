@@ -66,6 +66,7 @@ operacional: numeração, status e o índice.
 | [0054](0054-contingencia-do-numero-do-bot.md) | Contingência para sessão caída ou número banido: alerta por e-mail e runbook | Aceito | 2026-10-12 |
 | [0055](0055-professor-global-e-staff-fora-do-semanal.md) | Professor global (`!teacher` vale em todos os grupos, só admin/dono promove) e staff fora do desafio semanal | Aceito | 2026-10-22 |
 | [0056](0056-ranking-de-engajamento-para-admins.md) | `/ranking [meses]` para admins: alunos e turmas mais engajados (daily/weekly), turmas por média por aluno | Aceito | 2026-10-22 |
+| [0057](0057-teacher-alterna-e-teachers-aceita-so-o-numero.md) | `!teacher` alterna o papel (repetir remove) e `/teachers NÚMERO` basta no privado | Aceito | 2026-10-23 |
 
 ## Quando escrever um
 

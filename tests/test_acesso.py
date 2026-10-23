@@ -460,3 +460,17 @@ async def test_ranking_uso_invalido_vazio_e_nao_admin() -> None:
     sem, _, _ = _acesso()
     assert await comando_privado(sem, "/ranking 3", DONO) == messages.ranking_vazio(3)
     assert eh_comando_de_admin("/ranking")
+
+
+async def test_teachers_com_so_o_numero_alterna_e_o_singular_vale() -> None:
+    a, banco, _ = _acesso()
+
+    assert await comando_privado(a, f"/teachers {ALUNO}", ADMIN) == messages.PROFESSOR_ADICIONADO
+    assert banco.listar_professores() == [ALUNO]
+    assert await comando_privado(a, f"/teacher {ALUNO}", ADMIN) == messages.PROFESSOR_REMOVIDO
+    assert (
+        await comando_privado(a, "/teacher +55 (21) 97777-6666", ADMIN)
+        == messages.PROFESSOR_ADICIONADO
+    )
+    assert banco.listar_professores() == [ALUNO]
+    assert eh_comando_de_admin("/teacher 5521977776666")

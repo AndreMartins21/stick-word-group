@@ -215,7 +215,7 @@ apelidos em PT-BR que a spec sempre teve (`/ajuda`, `/lista`, `/pendentes`, `/pr
 - **Comandos de acesso (M15, ADR-0018), escondidos do `/help`:** `/groups` (dono e admins) lista os grupos
   ativos e os pendentes, com o nome e as horas que faltam para o bot sair, e `/groups off N` desativa o
   grupo N da lista; `/admin`, `/admin add NUMERO` e `/admin remove NUMERO` (só o dono) gerenciam os
-  admins; `/teachers`, `/teachers add NUMERO` e `/teachers remove NUMERO` (admins e dono, M57, ADR-0055)
+  admins; `/teachers`, `/teachers NUMERO` (alterna, M59), `/teachers add NUMERO` e `/teachers remove NUMERO` (admins e dono, M57, ADR-0055; `/teacher` vale também)
   gerenciam os professores globais; `/ranking [meses]` (admins e dono, M58, ADR-0056) mostra o top 20 de alunos, o top 10 de turmas (por interações por aluno matriculado) e o top 3 de cada turma, contando só respostas da revisão diária e do desafio semanal, padrão 6 meses (1 a 24), com staff fora. Para quem não pode usá-los, valem como qualquer comando desconhecido.
 
 ### 5.2b Grupos de turma (M16, ADR-0019)
@@ -243,7 +243,7 @@ deduplicação e do `sendSeen`). Mídia é ignorada, **exceto nota de voz que ci
   `!review` (M35: começa uma revisão diária na hora), `!daily [19h | on | off | weekends on|off | size N|auto]`, (M35, ADR-0033: qualquer membro vê; só admin do bot ou o dono muda; `!reminder` virou apelido que aponta para ele), `!weekly [fri 13h | on | off | size N|auto | now]` (M36, ADR-0034: mesma permissão; `now` começa o desafio na hora), `!level [A1-A2|A2-B1|B1-B2|B2-C1|C1-C2|C2]` (M33, ADR-0031: sem argumento qualquer membro vê o nível da turma; com argumento só professor ou dono muda, e aluno recebe a recusa), `!group` (nível, palavras,
   vencidas, lembretes e os membros com o papel, só nomes e sem menção) e `!help` (só os comandos do
   grupo). `!teacher`/`!student` (M57, ADR-0055: só admin do bot ou o dono; antes, qualquer professor da turma) mudam o papel, escondidos do `!help`;
-  `!teacher` vale em **todos** os grupos (coleção `professores/`), `!student` tira de todos; os alvos vêm das menções do payload ou do número escrito no texto. Staff (dono, admin do bot, professor global ou local) nunca é marcado no desafio semanal e aparece como `teacher` no `!group`.
+  `!teacher` vale em **todos** os grupos (coleção `professores/`) e **alterna** (M59, ADR-0057: repetir em quem já é professor o rebaixa em todos), `!student` tira de todos; os alvos vêm das menções do payload ou do número escrito no texto. Staff (dono, admin do bot, professor global ou local) nunca é marcado no desafio semanal e aparece como `teacher` no `!group`.
 - **Dentro de uma atividade:** marcar o bot com `2`, `3`, a frase etc. responde, pela mesma máquina de
   estados do privado; `!1`, `!2`, `!3` e `!texto` (e com `/`) continuam valendo. Na revisão, a marcação
   responde, `skip` pula a palavra, `skipall` (ou `0`/`stop`) encerra.
@@ -866,6 +866,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M56 | Contingência do número (seção 10.6b, ADR-0054): `infra/setup_alerta_sessao.sh` (alerta por e-mail quando `waha_status` vai a `FAILED`/`STOPPED`/`SCAN_QR_CODE`) e `docs/runbooks/banimento-do-numero.md` | `make check` passa; `DRY_RUN=1 ALERTA_EMAIL=... bash infra/setup_alerta_sessao.sh` mostra o canal e a política em JSON válido; o runbook cobre re-parear, número reserva, `BOT_NUMBER` e o aviso às turmas |
 | M57 | Professor global (seções 5.2/5.2b/7.1, ADR-0055): coleção `professores/`, `Banco.listar/adicionar/remover_professor`, `!teacher`/`!student` só de admin ou dono e valem em todos os grupos, `Deps.eh_staff`, admin e professor fora do desafio semanal, `/teachers` no privado | `make check` passa; `!teacher` num grupo tira a pessoa do rodízio do semanal de outro grupo; professor e aluno não promovem; `!student` tira de todos; admin do bot nunca é marcado; `/teachers` só para admin/dono; contrato do `Banco` (memória e emulador) |
 | M58 | `/ranking` (seções 5.2/7.1, ADR-0056): `Resposta.tipo`, `Repository.listar_respostas(desde=)`, `app/domain/ranking.py`, `/ranking [meses]` no privado para admin/dono em 3 mensagens | `make check` e `make test-emulador` passam; `/ranking` lista top 20 alunos, top 10 turmas (média por aluno, total e participação) e top 3 por turma; `/ranking 1` corta respostas antigas; staff fora; sem nome aparece `…1234`; `/ranking 0`/`25`/`abc` mostram o uso; não-admin não vê; sem respostas avisa |
+| M59 | `!teacher` alterna e `/teachers NUMERO` basta (seção 5.2/5.2b, ADR-0057) | `make check` passa; `!teacher N` duas vezes promove e depois rebaixa em todos os grupos (inclusive o professor só local); `/teachers N` e `/teacher N` alternam; texto com letras mostra o uso |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 

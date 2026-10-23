@@ -879,7 +879,7 @@ def ranking_por_turma(por_turma: Sequence[tuple[str, Sequence[RankingAluno]]]) -
     return "\n".join(linhas)
 
 
-PROFESSORES_USO = "Use /teachers add 5531999998888 or /teachers remove 5531999998888 (digits only, with country and area code)."
+PROFESSORES_USO = "Use /teachers 5531999998888 (adds a teacher, or removes one who already is) or /teachers add|remove 5531999998888 (digits only, with country and area code)."
 PROFESSOR_JA_E = "That number is already a teacher."
 PROFESSOR_NAO_E = "That number isn't a teacher."
 PROFESSOR_ADICIONADO = (
@@ -978,7 +978,11 @@ def papel_alterado(nome: str | None, papel: str) -> str:
 
 
 def papel_uso(comando: str, p: str = "!") -> str:
-    return f"Tell me who: {p}{comando} 5531999998888 (digits only, with country and area code)."
+    extra = " Repeat it for a teacher to make them a student again." if comando == "teacher" else ""
+    return (
+        f"Tell me who: {p}{comando} 5531999998888 (digits only, with country and area code)."
+        + extra
+    )
 
 
 def grupo_perfil(
