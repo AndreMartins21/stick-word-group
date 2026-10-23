@@ -30,8 +30,7 @@ from app.domain.models import (
     Synonym,
     Veredito,
 )
-from app.domain.ranking import LinhaAluno as RankingAluno
-from app.domain.ranking import LinhaTurma as RankingTurma
+from app.domain.ranking import Ranking as RankingGeral
 
 MIDIA_NAO_SUPORTADA = "📎 I can only read *text* for now — can you type the word instead? 🙂"
 ERRO_INESPERADO = "⚠️ Something went wrong on my end. Try again in a bit?"
@@ -794,11 +793,20 @@ def sem_plano(email: str) -> str:
 
 
 def grupo_ativado(p: str = "!") -> str:
-    return f"✅ I'm active in this group now. Send {p}help to see what I can do."
+    return (
+        f"✅ I'm active in this group now. Send {p}help to see what I can do.\n"
+        f"_Admins: {p}activate Class name sets the name shown in the ranking._"
+    )
 
 
 GRUPO_ATIVADO = grupo_ativado()
 GRUPO_JA_ATIVO = "I'm already active in this group. 🙂"
+
+
+def grupo_renomeado(nome: str) -> str:
+    return f"✅ Got it, this class is now called *{nome}*."
+
+
 GRUPO_DESATIVADO = "OK, I'll stay quiet in this group from now on. Your words are still saved."
 
 
@@ -848,35 +856,31 @@ def _posicao(i: int) -> str:
     return _MEDALHAS.get(i, f"{i}.")
 
 
-def ranking_alunos(alunos: Sequence[RankingAluno], meses: int) -> str:
-    linhas = [f"🏅 *Top {len(alunos)} students* · {_periodo(meses)}"]
-    for i, a in enumerate(alunos, 1):
-        turmas = ", ".join(a.turmas)
-        linhas.append(
-            f"{_posicao(i)} {a.nome} ({turmas}) — {a.total} "
-            f"(daily {a.diarias} · weekly {a.semanais}) · {a.dias} active days"
-        )
-    linhas.append("_Answers in the daily review and the weekly challenge. Teachers are left out._")
-    return "\n".join(linhas)
+def ranking_legenda(meses: int) -> str:
+    return f"📊 Engagement ranking · {_periodo(meses)}"
 
 
-def ranking_turmas(turmas: Sequence[RankingTurma], meses: int) -> str:
-    linhas = [f"🏫 *Top {len(turmas)} classes* · {_periodo(meses)}"]
-    for i, t in enumerate(turmas, 1):
-        linhas.append(
-            f"{_posicao(i)} {t.nome} — {t.por_aluno:.1f} per student · {t.total} total · "
-            f"{t.ativos}/{t.alunos} active"
-        )
-    linhas.append("_Ordered by answers per enrolled student, so small classes compete fairly._")
-    return "\n".join(linhas)
-
-
-def ranking_por_turma(por_turma: Sequence[tuple[str, Sequence[RankingAluno]]]) -> str:
-    linhas = ["⭐ *Most engaged in each class*"]
-    for nome, alunos in por_turma:
-        linhas.append(f"*{nome}*")
-        linhas += [f"{_posicao(i)} {a.nome} — {a.total}" for i, a in enumerate(alunos, 1)]
-    return "\n".join(linhas)
+def ranking_pdf_textos(ranking: RankingGeral, meses: int, gerado_em: datetime) -> dict[str, str]:
+    """Os textos fixos do PDF do /ranking (M62, ADR-0060), para o template não ter idioma."""
+    return {
+        "titulo": "Engagement ranking",
+        "periodo": _periodo(meses).capitalize(),
+        "gerado": f"Generated on {gerado_em:%Y-%m-%d}",
+        "alunos_titulo": f"Top {len(ranking.alunos)} students",
+        "col_aluno": "Student",
+        "col_turmas": "Class",
+        "col_total": "Total",
+        "col_daily": "Daily",
+        "col_weekly": "Weekly",
+        "col_dias": "Active days",
+        "nota_alunos": "Answers in the daily review and the weekly challenge. Teachers are left out.",
+        "turmas_titulo": f"Top {len(ranking.turmas)} classes",
+        "col_turma": "Class",
+        "col_por_aluno": "Per student",
+        "col_ativos": "Active",
+        "nota_turmas": "Ordered by answers per enrolled student, so small classes compete fairly.",
+        "destaques_titulo": "Most engaged in each class",
+    }
 
 
 PROFESSORES_USO = "Use /teachers 5531999998888 (adds a teacher, or removes one who already is) or /teachers add|remove 5531999998888 (digits only, with country and area code)."

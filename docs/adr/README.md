@@ -69,6 +69,7 @@ operacional: numeração, status e o índice.
 | [0057](0057-teacher-alterna-e-teachers-aceita-so-o-numero.md) | `!teacher` alterna o papel (repetir remove) e `/teachers NÚMERO` basta no privado | Aceito | 2026-10-23 |
 | [0058](0058-rebaixar-professor-limpa-todos-os-grupos.md) | Rebaixar um professor (`!student`, `!teacher` repetido, `/teachers remove`) limpa o papel em todos os grupos | Aceito | 2026-10-23 |
 | [0059](0059-group-rotula-admin-separado-de-teacher.md) | `!group` mostra o admin do bot como `admin`, não como `teacher` | Aceito | 2026-10-23 |
+| [0060](0060-ranking-em-pdf-e-nome-do-grupo-no-activate.md) | Ranking em PDF (Jinja2 + WeasyPrint) e nome do grupo no `!activate` | Aceito | 2026-10-23 |
 
 ## Quando escrever um
 

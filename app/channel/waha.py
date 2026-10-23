@@ -139,7 +139,11 @@ class WahaChannel:
         falha (rede, 404, campo ausente) vira `None` em vez de derrubar quem chamou."""
         try:
             resposta = await self._get(f"/api/{self._session}/groups/{chat_id}")
-            assunto = resposta.json().get("subject")
+            corpo = resposta.json()
+            # O WEBJS/NOWEB devolvem `subject`; o GOWS (whatsmeow) pode devolver `Name` (M62).
+            assunto = next(
+                (corpo[k] for k in ("subject", "Subject", "Name", "name") if corpo.get(k)), None
+            )
         except Exception:
             logger.warning("não consegui ler o nome do grupo", exc_info=True)
             return None

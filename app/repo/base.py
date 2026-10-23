@@ -185,6 +185,10 @@ class Banco(Protocol):
         """`False` se não estava ativo. Os dados do espaço ficam."""
         ...
 
+    def renomear_grupo(self, grupo_id: str, nome: str) -> bool:
+        """Troca só o nome de um grupo ativo (M62, ADR-0060). `False` se não estava ativo."""
+        ...
+
     def listar_grupos_ativos(self) -> list[GrupoAtivo]: ...
 
     def registrar_grupo_pendente(self, grupo_id: str, agora: datetime) -> bool:

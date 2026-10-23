@@ -22,6 +22,8 @@ dependencies = [
     "openpyxl>=3.1.5",
     "google-cloud-texttospeech>=2.37.0",
     "google-cloud-logging>=3.16.3",
+    "jinja2>=3.1.6",
+    "weasyprint>=70.0",
 ]
 
 [dependency-groups]
@@ -35,6 +37,7 @@ dev = [
     "types-pyyaml>=6.0",
     "pyyaml>=6.0.3",
     "types-openpyxl>=3.1.5.20260827",
+    "pypdf>=6.21.2",
 ]
 # Extras usados só pelos evals contra a API real (fora do pytest).
 evals = [
@@ -118,7 +121,7 @@ pretty = true
 plugins = ["pydantic.mypy"]
 # Bibliotecas sem stubs completos:
 [[tool.mypy.overrides]]
-module = ["google.*", "waha.*", "anthropic.*"]
+module = ["google.*", "waha.*", "anthropic.*", "weasyprint.*"]
 ignore_missing_imports = true
 
 # google-cloud-logging: o `Client.__init__` não é tipado (M27, ADR-0028) — isolado neste módulo.

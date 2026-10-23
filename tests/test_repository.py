@@ -446,6 +446,20 @@ def test_grupo_comeca_inativo_e_ativar_desativar(banco: Banco) -> None:
     assert banco.listar_grupos_ativos() == []
 
 
+def test_renomear_grupo_ativo_muda_so_o_nome(banco: Banco) -> None:
+    banco.ativar_grupo(GRUPO, nome="Group", por="5531999998888", agora=T0)
+
+    assert banco.renomear_grupo(GRUPO, "Turma A") is True
+
+    (grupo,) = banco.listar_grupos_ativos()
+    assert (grupo.nome, grupo.ativado_por, grupo.ativado_em) == ("Turma A", "5531999998888", T0)
+
+
+def test_renomear_grupo_que_nao_esta_ativo_devolve_falso(banco: Banco) -> None:
+    assert banco.renomear_grupo(GRUPO, "Turma A") is False
+    assert banco.listar_grupos_ativos() == []
+
+
 def test_desativar_grupo_que_nao_esta_ativo_devolve_falso(banco: Banco) -> None:
     assert banco.desativar_grupo(GRUPO) is False
 

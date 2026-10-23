@@ -437,6 +437,15 @@ async def _responder(
         if not payload.has_media and admin.eh_comando_de_admin(payload.body):
             resposta = await admin.comando_privado(acesso, payload.body, numero)
             if resposta is not None:
+                if isinstance(resposta, admin.Arquivo):
+                    await channel.send_file(
+                        chat_destino,
+                        resposta.nome,
+                        resposta.conteudo,
+                        resposta.tipo,
+                        resposta.legenda,
+                    )
+                    return
                 for parte in [resposta] if isinstance(resposta, str) else resposta:
                     await router.responder_avulso(chat_destino, parte)
                 return
@@ -593,7 +602,9 @@ async def _tratar_mensagem_de_grupo(
     await channel.send_seen(grupo_id)
 
     if comando is not None:
-        await admin.tratar_ativacao_no_grupo(acesso, comando, grupo_id, numero)
+        await admin.tratar_ativacao_no_grupo(
+            acesso, comando, grupo_id, numero, admin.nome_da_ativacao(corpo, settings.group_prefix)
+        )
         return
     autor = Autor(
         numero=numero,

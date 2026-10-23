@@ -257,6 +257,14 @@ async def test_group_name_le_o_assunto_do_grupo() -> None:
     assert nome == "Turma A"
 
 
+@pytest.mark.parametrize("campo", ["subject", "Subject", "Name", "name"])
+async def test_group_name_aceita_o_nome_em_qualquer_formato_de_engine(campo: str) -> None:
+    canal = _canal(httpx.MockTransport(lambda _: httpx.Response(200, json={campo: "Turma A"})))
+
+    assert await canal.group_name("1@g.us") == "Turma A"
+    await canal.aclose()
+
+
 async def test_group_name_devolve_none_quando_falha_ou_nao_ha_assunto() -> None:
     respostas = iter([httpx.Response(404, json={}), httpx.Response(200, json={"id": "x@g.us"})])
 

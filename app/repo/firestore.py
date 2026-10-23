@@ -338,6 +338,12 @@ class FirestoreBanco:
                 {"proximo_tick": tick}, merge=True
             )
 
+    def renomear_grupo(self, grupo_id: str, nome: str) -> bool:
+        if not self._ler_grupo_ativo(grupo_id):
+            return False
+        self._db.collection("espacos").document(grupo_id).set({"nome": nome}, merge=True)
+        return True
+
     def desativar_grupo(self, grupo_id: str) -> bool:
         try:
             if not self._ler_grupo_ativo(grupo_id):

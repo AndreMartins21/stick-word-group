@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 18mm 14mm; @bottom-right { content: counter(page) " / " counter(pages); font-size: 8pt; color: #888; } }
+  body { font-family: "DejaVu Sans", sans-serif; font-size: 9.5pt; color: #222; }
+  h1 { font-size: 18pt; margin: 0 0 2mm; }
+  h2 { font-size: 12pt; margin: 8mm 0 2mm; color: #1d4e89; }
+  .sub { color: #666; margin-bottom: 4mm; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; background: #1d4e89; color: #fff; padding: 1.5mm 2mm; font-size: 8.5pt; }
+  td { padding: 1.5mm 2mm; border-bottom: 0.2mm solid #ddd; }
+  tr:nth-child(even) td { background: #f4f7fb; }
+  tr { page-break-inside: avoid; }
+  .n { text-align: right; white-space: nowrap; }
+  .pos { width: 9mm; }
+  .nota { color: #777; font-size: 8pt; margin-top: 1.5mm; }
+  .turma { margin-top: 3mm; page-break-inside: avoid; }
+  .turma h3 { font-size: 10pt; margin: 0 0 1mm; }
+</style>
+</head>
+<body>
+<h1>{{ t.titulo }}</h1>
+<div class="sub">{{ t.periodo }} · {{ t.gerado }}</div>
+
+<h2>{{ t.alunos_titulo }}</h2>
+<table>
+  <tr><th class="pos">#</th><th>{{ t.col_aluno }}</th><th>{{ t.col_turmas }}</th>
+      <th class="n">{{ t.col_total }}</th><th class="n">{{ t.col_daily }}</th>
+      <th class="n">{{ t.col_weekly }}</th><th class="n">{{ t.col_dias }}</th></tr>
+  {% for a in ranking.alunos %}
+  <tr><td class="pos">{{ loop.index }}</td><td>{{ a.nome }}</td><td>{{ a.turmas | join(", ") }}</td>
+      <td class="n">{{ a.total }}</td><td class="n">{{ a.diarias }}</td>
+      <td class="n">{{ a.semanais }}</td><td class="n">{{ a.dias }}</td></tr>
+  {% endfor %}
+</table>
+<div class="nota">{{ t.nota_alunos }}</div>
+
+<h2>{{ t.turmas_titulo }}</h2>
+<table>
+  <tr><th class="pos">#</th><th>{{ t.col_turma }}</th><th class="n">{{ t.col_por_aluno }}</th>
+      <th class="n">{{ t.col_total }}</th><th class="n">{{ t.col_ativos }}</th></tr>
+  {% for c in ranking.turmas %}
+  <tr><td class="pos">{{ loop.index }}</td><td>{{ c.nome }}</td>
+      <td class="n">{{ "%.1f" | format(c.por_aluno) }}</td><td class="n">{{ c.total }}</td>
+      <td class="n">{{ c.ativos }}/{{ c.alunos }}</td></tr>
+  {% endfor %}
+</table>
+<div class="nota">{{ t.nota_turmas }}</div>
+
+<h2>{{ t.destaques_titulo }}</h2>
+{% for nome, top in ranking.por_turma %}
+<div class="turma"><h3>{{ nome }}</h3>
+<table>
+  {% for a in top %}
+  <tr><td class="pos">{{ loop.index }}</td><td>{{ a.nome }}</td><td class="n">{{ a.total }}</td></tr>
+  {% endfor %}
+</table></div>
+{% endfor %}
+</body>
+</html>

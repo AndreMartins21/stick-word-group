@@ -20,6 +20,7 @@ from app.flows.admin import (
     eh_comando_de_admin,
     eh_comando_de_ativacao,
     grupo_autorizado,
+    nome_da_ativacao,
     tratar_ativacao_no_grupo,
 )
 from app.repo.memory import MemoryBanco
@@ -229,7 +230,7 @@ async def test_dono_lista_adiciona_e_remove_admins() -> None:
     a, banco, _ = _acesso()
 
     lista = await comando_privado(a, "/admin", DONO)
-    assert lista is not None and ADMIN in lista
+    assert isinstance(lista, str) and ADMIN in lista
 
     assert await comando_privado(a, f"/admin add {ALUNO}", DONO) == messages.ADMIN_ADICIONADO
     assert banco.listar_admins() == [ADMIN, ALUNO]
@@ -297,7 +298,7 @@ async def test_groups_lista_ativos_fixos_e_pendentes_com_o_prazo() -> None:
 
     resposta = await comando_privado(a, "/groups", ADMIN)
 
-    assert resposta is not None
+    assert isinstance(resposta, str)
     assert "1. Turma A" in resposta
     assert "Turma Fixa (fixed in the config)" in resposta
     assert "Turma C — 5h left" in resposta
@@ -309,7 +310,7 @@ async def test_groups_sem_nenhum_grupo() -> None:
 
     resposta = await comando_privado(a, "/groups", DONO)
 
-    assert resposta is not None and "not in any group yet" in resposta
+    assert isinstance(resposta, str) and "not in any group yet" in resposta
 
 
 async def test_groups_off_desativa_pelo_numero_da_lista() -> None:
@@ -374,7 +375,7 @@ async def test_admin_lista_adiciona_e_remove_professores() -> None:
     assert banco.listar_professores() == [ALUNO]
     assert await comando_privado(a, f"/teachers add {ALUNO}", DONO) == messages.PROFESSOR_JA_E
     lista = await comando_privado(a, "/teachers", DONO)
-    assert lista is not None and ALUNO in lista
+    assert isinstance(lista, str) and ALUNO in lista
     assert (
         await comando_privado(a, f"/teachers remove {ALUNO}", ADMIN) == messages.PROFESSOR_REMOVIDO
     )
@@ -429,26 +430,44 @@ def _com_respostas() -> tuple[Acesso, MemoryBanco]:
     return a, banco
 
 
-async def test_ranking_manda_tres_mensagens_sem_staff_e_sem_telefone() -> None:
+def _texto_do_pdf(r: object) -> str:
+    from io import BytesIO
+
+    from pypdf import PdfReader
+
+    from app.flows.admin import Arquivo
+
+    assert isinstance(r, Arquivo)
+    return "\n".join(p.extract_text() for p in PdfReader(BytesIO(r.conteudo)).pages)
+
+
+async def test_ranking_devolve_um_pdf_sem_staff_e_sem_telefone() -> None:
+    from app.flows.admin import Arquivo
+
     a, _ = _com_respostas()
 
     r = await comando_privado(a, "/ranking", ADMIN)
 
-    assert isinstance(r, list) and len(r) == 3
-    assert "Caio" in r[0] and "Turma B2" in r[0] and "Adm" not in r[0]
-    assert "Turma B2" in r[1] and "1/1 active" in r[1]
-    assert "*Turma B2*" in r[2]
-    assert all(ALUNO not in parte for parte in r)
+    assert isinstance(r, Arquivo)
+    assert r.tipo == "application/pdf" and r.nome == f"ranking-{a.agora():%Y-%m-%d}.pdf"
+    assert r.legenda == messages.ranking_legenda(6)
+    texto = _texto_do_pdf(r)
+    assert "Caio" in texto and "Turma B2" in texto and "Adm" not in texto
+    assert "1/1" in texto
+    assert ALUNO not in texto
 
 
 async def test_ranking_respeita_os_meses_pedidos() -> None:
     a, _ = _com_respostas()
 
-    r1 = await comando_privado(a, "/ranking 1", ADMIN)
-    r6 = await comando_privado(a, "/ranking 6", ADMIN)
+    texto1 = _texto_do_pdf(await comando_privado(a, "/ranking 1", ADMIN))
+    texto6 = _texto_do_pdf(await comando_privado(a, "/ranking 6", ADMIN))
 
-    assert isinstance(r1, list) and "— 2 (daily 2 · weekly 0)" in r1[0]
-    assert isinstance(r6, list) and "— 3 (daily 2 · weekly 1)" in r6[0]
+    assert "Last month" in texto1 and "Last 6 months" in texto6
+    # Caio: 2 respostas no último mês; com 6 meses entra o semanal de 90 dias atrás.
+    # (sem espaços: o kerning do PDF separa letras como em "T urma")
+    assert "1CaioTurmaB22201" in "".join(texto1.split())
+    assert "1CaioTurmaB23212" in "".join(texto6.split())
 
 
 async def test_ranking_uso_invalido_vazio_e_nao_admin() -> None:
@@ -474,3 +493,49 @@ async def test_teachers_com_so_o_numero_alterna_e_o_singular_vale() -> None:
     )
     assert banco.listar_professores() == [ALUNO]
     assert eh_comando_de_admin("/teacher 5521977776666")
+
+
+# --- M62 (ADR-0060): `!activate <nome>` ---------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("texto", "esperado"),
+    [
+        ("!activate", None),
+        ("!activate   ", None),
+        ("!activate Middle-earth, Midnights & Mountains", "Middle-earth, Midnights & Mountains"),
+        ("  /activate   Turma   A ", "Turma A"),
+        ("!activate " + "x" * 200, "x" * 80),
+        ("!deactivate Turma A", None),
+    ],
+)
+def test_nome_da_ativacao(texto: str, esperado: str | None) -> None:
+    assert nome_da_ativacao(texto) == esperado
+
+
+async def test_activate_com_nome_vale_mais_que_o_do_whatsapp() -> None:
+    a, banco, canal = _acesso()
+    canal.nomes_de_grupos[GRUPO] = "Group"
+
+    await tratar_ativacao_no_grupo(a, "activate", GRUPO, ADMIN, "Middle-earth")
+
+    assert banco.listar_grupos_ativos()[0].nome == "Middle-earth"
+    assert canal.textos_enviados == [(GRUPO, messages.GRUPO_ATIVADO)]
+
+
+async def test_activate_com_nome_num_grupo_ativo_so_renomeia() -> None:
+    a, banco, canal = _acesso()
+    await tratar_ativacao_no_grupo(a, "activate", GRUPO, ADMIN)
+    await tratar_ativacao_no_grupo(a, "activate", GRUPO, ADMIN, "Nova turma")
+
+    assert banco.listar_grupos_ativos()[0].nome == "Nova turma"
+    assert canal.textos_enviados[-1] == (GRUPO, messages.grupo_renomeado("Nova turma"))
+
+
+async def test_activate_com_nome_de_quem_nao_e_admin_e_silencio() -> None:
+    a, banco, canal = _acesso()
+    await tratar_ativacao_no_grupo(a, "activate", GRUPO, ADMIN)
+    await tratar_ativacao_no_grupo(a, "activate", GRUPO, ALUNO, "Invasor")
+
+    assert banco.listar_grupos_ativos()[0].nome != "Invasor"
+    assert len(canal.textos_enviados) == 1

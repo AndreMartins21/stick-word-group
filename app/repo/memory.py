@@ -8,7 +8,7 @@ salvar não muda o que está guardado.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 
 from app.domain.models import (
@@ -230,6 +230,14 @@ class MemoryBanco:
         meta.ativo, meta.nome, meta.ativado_por, meta.ativado_em = True, nome, por, agora
         self._pendentes.pop(grupo_id, None)
         self._grupos_sem_lembrete.discard(grupo_id)
+
+    def renomear_grupo(self, grupo_id: str, nome: str) -> bool:
+        atual = self._grupos_ativos.get(grupo_id)
+        if atual is None:
+            return False
+        self._grupos_ativos[grupo_id] = replace(atual, nome=nome)
+        self._meta_do_espaco(grupo_id).nome = nome
+        return True
 
     def desativar_grupo(self, grupo_id: str) -> bool:
         if self._grupos_ativos.pop(grupo_id, None) is None:

@@ -13,6 +13,11 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
+# Pango/fontes para o WeasyPrint gerar o PDF do /ranking (M62, ADR-0060).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 # Camada de dependências isolada do código: só reinstala se pyproject/uv.lock mudarem.
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project

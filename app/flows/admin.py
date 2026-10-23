@@ -10,6 +10,7 @@ Aqui não há IA nem sessão: só regras de acesso, com respostas curtas e fixas
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from collections.abc import Callable, Sequence
@@ -26,6 +27,7 @@ from app.flows.base import bloq
 from app.flows.papeis import rebaixar_em_todos
 from app.logging_config import id_curto, registrar_evento
 from app.repo.base import Banco
+from app.services.relatorio_ranking import gerar_pdf_ranking
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +49,7 @@ class Acesso:
 
 class Resultado(StrEnum):
     ATIVADO = "ativado"
+    RENOMEADO = "renomeado"
     JA_ATIVO = "ja_ativo"
     LIMITE = "limite"
     NAO_ADMIN = "nao_admin"
@@ -84,10 +87,25 @@ def eh_comando_de_ativacao(texto: str, prefixo: str = "!") -> str | None:
     return comando if comando in {"activate", "deactivate"} else None
 
 
+NOME_DO_GRUPO_MAXIMO = 80
+
+
+def nome_da_ativacao(texto: str, prefixo: str = "!") -> str | None:
+    """O nome que o admin escreveu depois de `!activate` (M62, ADR-0060), com os espaços
+    normalizados e no máximo `NOME_DO_GRUPO_MAXIMO` caracteres; `None` se não escreveu nada."""
+    partes = texto.split(maxsplit=1)
+    if len(partes) < 2 or eh_comando_de_ativacao(texto, prefixo) != "activate":
+        return None
+    nome = " ".join(partes[1].split())[:NOME_DO_GRUPO_MAXIMO].strip()
+    return nome or None
+
+
 def ativar_grupo(a: Acesso, grupo_id: str, numero: str, nome: str | None) -> Resultado:
     if not eh_admin(a, numero):
         return Resultado.NAO_ADMIN
     if grupo_autorizado(a, grupo_id):
+        if nome and a.banco.renomear_grupo(grupo_id, nome):
+            return Resultado.RENOMEADO
         return Resultado.JA_ATIVO
     if len(a.banco.listar_grupos_ativos()) >= a.max_grupos:
         return Resultado.LIMITE
@@ -105,27 +123,32 @@ def desativar_grupo(a: Acesso, grupo_id: str, numero: str) -> Resultado:
     return Resultado.NAO_ESTAVA_ATIVO  # inclusive um grupo fixo: esse só sai da configuração
 
 
-def _resposta_do_grupo(a: Acesso, resultado: Resultado) -> str | None:
+def _resposta_do_grupo(a: Acesso, resultado: Resultado, nome: str | None = None) -> str | None:
     return {
         Resultado.ATIVADO: messages.grupo_ativado(a.prefixo),
         Resultado.JA_ATIVO: messages.GRUPO_JA_ATIVO,
+        Resultado.RENOMEADO: messages.grupo_renomeado(nome or ""),
         Resultado.DESATIVADO: messages.GRUPO_DESATIVADO,
     }.get(resultado)
 
 
-async def tratar_ativacao_no_grupo(a: Acesso, comando: str, grupo_id: str, numero: str) -> None:
+async def tratar_ativacao_no_grupo(
+    a: Acesso, comando: str, grupo_id: str, numero: str, nome_digitado: str | None = None
+) -> None:
     """Executa `!activate`/`!deactivate` vindo de `numero` e responde no grupo. Quem não é admin
-    não recebe nada: o bot não revela que existe."""
+    não recebe nada: o bot não revela que existe. O nome que o admin digitou (`!activate Turma A`)
+    vale mais que o do WhatsApp e, num grupo já ativo, renomeia (M62, ADR-0060)."""
+    nome: str | None = None
     if comando == "activate":
         e_admin = await bloq(eh_admin, a, numero)
-        nome = await a.canal.group_name(grupo_id) if e_admin else None
+        nome = nome_digitado or (await a.canal.group_name(grupo_id) if e_admin else None)
         resultado = await bloq(ativar_grupo, a, grupo_id, numero, nome)
     else:
         resultado = await bloq(desativar_grupo, a, grupo_id, numero)
 
     if resultado is Resultado.LIMITE:
         await a.canal.send_text(grupo_id, messages.grupo_limite(a.max_grupos))
-    elif (texto := _resposta_do_grupo(a, resultado)) is not None:
+    elif (texto := _resposta_do_grupo(a, resultado, nome)) is not None:
         await a.canal.send_text(grupo_id, texto)
     elif resultado is Resultado.NAO_ADMIN:
         logger.info("!%s de quem não é admin ignorado", comando)
@@ -155,7 +178,7 @@ def eh_comando_de_admin(texto: str, prefixo: str = "!") -> bool:
     return _comando_privado(texto, prefixo) is not None
 
 
-async def comando_privado(a: Acesso, texto: str, numero: str) -> str | list[str] | None:
+async def comando_privado(a: Acesso, texto: str, numero: str) -> str | list[str] | Arquivo | None:
     """A resposta a `/groups`, `/admin`, `/teachers` ou `/ranking` (uma lista quando são várias
     mensagens), ou `None` se o texto não é um desses comandos OU quem escreveu não pode usá-lo
     (então o chamador trata como um texto qualquer)."""
@@ -224,11 +247,21 @@ def _professores(a: Acesso, argumentos: list[str], por: str) -> str:
     return messages.PROFESSOR_REMOVIDO
 
 
+@dataclass(frozen=True)
+class Arquivo:
+    """Um arquivo a enviar no privado em vez de texto (o PDF do /ranking, M62)."""
+
+    nome: str
+    conteudo: bytes
+    tipo: str
+    legenda: str
+
+
 RANKING_MESES_PADRAO = 6
 RANKING_MESES_MAXIMO = 24
 
 
-async def _ranking(a: Acesso, argumentos: list[str]) -> str | list[str]:
+async def _ranking(a: Acesso, argumentos: list[str]) -> str | Arquivo:
     """`/ranking [meses]` (M58, ADR-0056): os alunos e as turmas mais engajados do período."""
     meses = RANKING_MESES_PADRAO
     if argumentos:
@@ -262,11 +295,11 @@ async def _ranking(a: Acesso, argumentos: list[str]) -> str | list[str]:
     ranking = calcular(turmas, eh_staff=eh_staff)
     if ranking.vazio:
         return messages.ranking_vazio(meses)
-    return [
-        messages.ranking_alunos(ranking.alunos, meses),
-        messages.ranking_turmas(ranking.turmas, meses),
-        messages.ranking_por_turma(ranking.por_turma),
-    ]
+    agora = a.agora()
+    pdf = await asyncio.to_thread(gerar_pdf_ranking, ranking, meses, agora)  # CPU: fora do loop
+    return Arquivo(
+        f"ranking-{agora:%Y-%m-%d}.pdf", pdf, "application/pdf", messages.ranking_legenda(meses)
+    )
 
 
 async def _grupos(a: Acesso, argumentos: list[str]) -> str:
