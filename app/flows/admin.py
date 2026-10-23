@@ -23,6 +23,7 @@ from app.channel.parser import numero_esta_na_lista
 from app.domain.choices import normalizar
 from app.domain.ranking import Turma, calcular, meses_atras
 from app.flows.base import bloq
+from app.flows.papeis import rebaixar_em_todos
 from app.logging_config import id_curto, registrar_evento
 from app.repo.base import Banco
 
@@ -218,8 +219,7 @@ def _professores(a: Acesso, argumentos: list[str], por: str) -> str:
             return messages.PROFESSOR_JA_E
         a.banco.adicionar_professor(alvo, por=por, agora=a.agora())
         return messages.PROFESSOR_ADICIONADO
-    existente = next((n for n in atuais if numero_esta_na_lista(alvo, [n])), None)
-    if existente is None or not a.banco.remover_professor(existente):
+    if not rebaixar_em_todos(a.banco, alvo):
         return messages.PROFESSOR_NAO_E
     return messages.PROFESSOR_REMOVIDO
 

@@ -31,6 +31,7 @@ from app.domain.models import Entry, Estado, Membro, Papel, Profile, Sessao
 from app.domain.srs import vencida
 from app.flows import capture, commands, practice, review, semanal
 from app.flows.base import Autor, Deps, bloq
+from app.flows.papeis import rebaixar_em_todos
 
 logger = logging.getLogger(__name__)
 
@@ -272,13 +273,10 @@ def _definir_papel(d: Deps, numero: str, papel: Papel, por: str) -> Membro:
     novo = (membro or Membro(entrou_em=d.agora())).model_copy(update={"papel": papel})
     d.repo.salvar_membro(chave, novo)
     if d.banco is not None:
-        existente = next(
-            (n for n in d.banco.listar_professores() if numero_esta_na_lista(numero, [n])), None
-        )
-        if papel == "professor" and existente is None:
+        if papel == "aluno":
+            rebaixar_em_todos(d.banco, numero)  # global + papel local de todos os grupos
+        elif not any(numero_esta_na_lista(numero, [n]) for n in d.banco.listar_professores()):
             d.banco.adicionar_professor(numero, por=por, agora=d.agora())
-        elif papel == "aluno" and existente is not None:
-            d.banco.remover_professor(existente)
     return novo
 
 

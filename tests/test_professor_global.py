@@ -4,7 +4,7 @@ e professores e admins nunca são marcados no desafio semanal."""
 from __future__ import annotations
 
 from app import messages
-from app.domain.models import Membro
+from app.domain.models import Membro, Profile
 from app.flows import review
 from app.flows.base import Autor
 from tests.helpers import ANA, BIA, CAIO, DONO_NUMERO, GRUPO, T0, Montagem
@@ -122,3 +122,43 @@ async def test_teacher_repetido_tambem_rebaixa_o_professor_so_local() -> None:
     (resposta,) = await m.diz_no_grupo(DONO, f"!teacher {CARLA.numero}")
 
     assert resposta == messages.papel_alterado("Carla", "aluno")
+
+
+def _acesso_do(m: Montagem):  # type: ignore[no-untyped-def]
+    from app.flows.admin import Acesso
+
+    return Acesso(
+        banco=m.banco,
+        canal=m.channel,
+        eh_dono=lambda n: n == DONO_NUMERO,
+        grupos_fixos=(),
+        max_grupos=10,
+        agora=lambda: T0,
+        contato="x@y.z",
+    )
+
+
+async def test_teachers_remove_no_privado_tambem_limpa_o_papel_local_dos_grupos() -> None:
+    from app.flows.admin import comando_privado
+
+    m = _turma()
+    await m.diz_no_grupo(DONO, f"!teacher {ANA.numero}")  # global + papel local no GRUPO
+    assert "• Ana (teacher)" in (await m.diz_no_grupo(BIA, "!group"))[0]
+
+    await comando_privado(_acesso_do(m), f"/teachers remove {ANA.numero}", DONO_NUMERO)
+
+    assert "• Ana (student)" in (await m.diz_no_grupo(BIA, "!group"))[0]
+    assert ANA.numero in await _elegiveis(m)
+
+
+async def test_student_num_grupo_rebaixa_nos_outros_grupos_tambem() -> None:
+    m = _turma()
+    repo2 = m.banco.do_espaco(OUTRO_GRUPO)
+    repo2.salvar_perfil(Profile(nivel="B1-B2"))  # um grupo de verdade já tem o perfil gravado
+    repo2.salvar_membro(ANA.numero, Membro(nome="Ana", papel="professor", entrou_em=T0))
+    await m.diz_no_grupo(DONO, f"!teacher {ANA.numero}")
+
+    await m.diz_no_grupo(DONO, f"!student {ANA.numero}")
+
+    assert repo2.obter_membro(ANA.numero).papel == "aluno"  # type: ignore[union-attr]
+    assert m.banco.listar_professores() == []
