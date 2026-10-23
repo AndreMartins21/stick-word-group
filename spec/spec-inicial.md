@@ -216,7 +216,7 @@ apelidos em PT-BR que a spec sempre teve (`/ajuda`, `/lista`, `/pendentes`, `/pr
   ativos e os pendentes, com o nome e as horas que faltam para o bot sair, e `/groups off N` desativa o
   grupo N da lista; `/admin`, `/admin add NUMERO` e `/admin remove NUMERO` (só o dono) gerenciam os
   admins; `/teachers`, `/teachers NUMERO` (alterna, M59), `/teachers add NUMERO` e `/teachers remove NUMERO` (admins e dono, M57, ADR-0055; `/teacher` vale também)
-  gerenciam os professores globais; `/ranking [meses]` (admins e dono, M58, ADR-0056; PDF desde o M62, ADR-0060) envia um PDF com o top 20 de alunos, o top 10 de turmas (por interações por aluno matriculado) e o top 3 de cada turma, contando só respostas da revisão diária e do desafio semanal, padrão 6 meses (1 a 24), com staff fora. Para quem não pode usá-los, valem como qualquer comando desconhecido.
+  gerenciam os professores globais; `/ranking [meses]` (admins e dono, M58, ADR-0056; PDF desde o M62, ADR-0060) envia um PDF (com o número e o nome salvo de cada aluno, M63, ADR-0061) com o top 20 de alunos, o top 10 de turmas (por interações por aluno matriculado) e o top 3 de cada turma, contando só respostas da revisão diária e do desafio semanal, padrão 6 meses (1 a 24), com staff fora. Para quem não pode usá-los, valem como qualquer comando desconhecido.
 
 ### 5.2b Grupos de turma (M16, ADR-0019)
 
@@ -870,6 +870,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M60 | Rebaixar limpa todos os grupos (seção 5.2b, ADR-0058): `flows/papeis.py:rebaixar_em_todos` em `!student`, `!teacher` repetido e `/teachers remove` | `make check` e `make test-emulador` passam; `/teachers remove` no privado e `!student` em outro grupo fazem o `!group` mostrar `student` em todos os grupos |
 | M61 | `!group` rotula admin como `admin` (seção 5.2b, ADR-0059): `Deps.eh_admin`; `!student` num admin responde `papel_alterado_admin` | `make check` passa; `!group` mostra `(admin)` para dono e admins e `(teacher)` só para professores; `!student` num admin avisa que ele continua admin |
 | M62 | `/ranking` em PDF e nome do grupo (seções 5.2/7.1, ADR-0060): `services/relatorio_ranking.py` + `templates/ranking.html.j2` (Jinja2 + WeasyPrint), `admin.Arquivo`, `!activate <nome>` grava/renomeia (`Repository.renomear_grupo`), `group_name` aceita `Name` do GOWS, pango no Dockerfile | `make check` passa; `/ranking` manda um `.pdf` com o nome real das turmas; `!activate Turma A` num grupo ativo renomeia; `docker build` importa o WeasyPrint |
+| M63 | Ranking mostra número e nome salvo, sem Daily/Weekly (seção 5.2, ADR-0061): `LinhaAluno.numero`, coluna "Number" no PDF | `make check` passa; o PDF traz o nome (ou "—") e o `+número` de cada aluno, sem as colunas Daily e Weekly |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 

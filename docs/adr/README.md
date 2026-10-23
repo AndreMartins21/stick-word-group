@@ -70,6 +70,7 @@ operacional: numeração, status e o índice.
 | [0058](0058-rebaixar-professor-limpa-todos-os-grupos.md) | Rebaixar um professor (`!student`, `!teacher` repetido, `/teachers remove`) limpa o papel em todos os grupos | Aceito | 2026-10-23 |
 | [0059](0059-group-rotula-admin-separado-de-teacher.md) | `!group` mostra o admin do bot como `admin`, não como `teacher` | Aceito | 2026-10-23 |
 | [0060](0060-ranking-em-pdf-e-nome-do-grupo-no-activate.md) | Ranking em PDF (Jinja2 + WeasyPrint) e nome do grupo no `!activate` | Aceito | 2026-10-23 |
+| [0061](0061-ranking-mostra-numero-e-nome-salvo.md) | O PDF do ranking mostra o número e o nome salvo do aluno (substitui a decisão 7 do ADR-0056) | Aceito | 2026-10-23 |
 
 ## Quando escrever um
 

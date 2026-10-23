@@ -18,6 +18,13 @@ _AMBIENTE = Environment(
 )
 
 
+def _telefone(numero: str) -> str:
+    return f"+{numero}" if numero else ""
+
+
+_AMBIENTE.filters["telefone"] = _telefone
+
+
 def gerar_pdf_ranking(ranking: Ranking, meses: int, gerado_em: datetime) -> bytes:
     html = _AMBIENTE.get_template("ranking.html.j2").render(
         ranking=ranking,

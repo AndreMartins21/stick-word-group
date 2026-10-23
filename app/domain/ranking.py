@@ -42,7 +42,8 @@ class Turma:
 
 @dataclass
 class LinhaAluno:
-    nome: str
+    nome: str  # o nome salvo do WhatsApp; vazio se o bot nunca o recebeu
+    numero: str = ""
     total: int = 0
     diarias: int = 0
     semanais: int = 0
@@ -74,10 +75,6 @@ class Ranking:
         return not self.alunos
 
 
-def _nome(numero: str, membro_nome: str | None) -> str:
-    return membro_nome or f"…{numero[-4:]}"  # nunca o telefone inteiro
-
-
 def _contar(
     respostas: list[Resposta], nomes: dict[str, str], fuso: ZoneInfo
 ) -> dict[str, LinhaAluno]:
@@ -86,7 +83,8 @@ def _contar(
         por[r.autor_id].append(r)
     return {
         autor: LinhaAluno(
-            nome=nomes.get(autor, _nome(autor, None)),
+            nome=nomes.get(autor, ""),
+            numero=autor,
             total=len(rs),
             diarias=sum(1 for r in rs if r.tipo == "diaria"),
             semanais=sum(1 for r in rs if r.tipo == "semanal"),
@@ -97,8 +95,8 @@ def _contar(
     }
 
 
-def _chave(a: LinhaAluno) -> tuple[int, int, int, str]:
-    return (-a.total, -a.dias, -a.aceitas, a.nome)
+def _chave(a: LinhaAluno) -> tuple[int, int, int, str, str]:
+    return (-a.total, -a.dias, -a.aceitas, a.nome, a.numero)
 
 
 def calcular(
@@ -113,7 +111,7 @@ def calcular(
     por_turma: list[tuple[str, list[LinhaAluno]]] = []
 
     for turma in turmas:
-        nomes = {n: _nome(n, m.nome) for n, m in turma.membros}
+        nomes = {n: m.nome or "" for n, m in turma.membros}
         locais = {n for n, m in turma.membros if m.papel == "professor"}  # papel antigo, por grupo
 
         def staff(numero: str, locais: set[str] = locais) -> bool:
@@ -128,7 +126,8 @@ def calcular(
             top = sorted(contagem.values(), key=_chave)[:TOP_POR_TURMA]
             por_turma.append((turma.nome, top))
         for autor, linha in contagem.items():
-            g = globais.setdefault(autor, LinhaAluno(nome=linha.nome))
+            g = globais.setdefault(autor, LinhaAluno(nome=linha.nome, numero=autor))
+            g.nome = g.nome or linha.nome
             g.total += linha.total
             g.diarias += linha.diarias
             g.semanais += linha.semanais

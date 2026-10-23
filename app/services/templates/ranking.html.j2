@@ -26,13 +26,11 @@
 
 <h2>{{ t.alunos_titulo }}</h2>
 <table>
-  <tr><th class="pos">#</th><th>{{ t.col_aluno }}</th><th>{{ t.col_turmas }}</th>
-      <th class="n">{{ t.col_total }}</th><th class="n">{{ t.col_daily }}</th>
-      <th class="n">{{ t.col_weekly }}</th><th class="n">{{ t.col_dias }}</th></tr>
+  <tr><th class="pos">#</th><th>{{ t.col_aluno }}</th><th>{{ t.col_numero }}</th><th>{{ t.col_turmas }}</th>
+      <th class="n">{{ t.col_total }}</th><th class="n">{{ t.col_dias }}</th></tr>
   {% for a in ranking.alunos %}
-  <tr><td class="pos">{{ loop.index }}</td><td>{{ a.nome }}</td><td>{{ a.turmas | join(", ") }}</td>
-      <td class="n">{{ a.total }}</td><td class="n">{{ a.diarias }}</td>
-      <td class="n">{{ a.semanais }}</td><td class="n">{{ a.dias }}</td></tr>
+  <tr><td class="pos">{{ loop.index }}</td><td>{{ a.nome or "—" }}</td><td class="n">{{ a.numero | telefone }}</td><td>{{ a.turmas | join(", ") }}</td>
+      <td class="n">{{ a.total }}</td><td class="n">{{ a.dias }}</td></tr>
   {% endfor %}
 </table>
 <div class="nota">{{ t.nota_alunos }}</div>
@@ -54,7 +52,7 @@
 <div class="turma"><h3>{{ nome }}</h3>
 <table>
   {% for a in top %}
-  <tr><td class="pos">{{ loop.index }}</td><td>{{ a.nome }}</td><td class="n">{{ a.total }}</td></tr>
+  <tr><td class="pos">{{ loop.index }}</td><td>{{ a.nome or "—" }}</td><td class="n">{{ a.numero | telefone }}</td><td class="n">{{ a.total }}</td></tr>
   {% endfor %}
 </table></div>
 {% endfor %}

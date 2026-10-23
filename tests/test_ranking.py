@@ -135,12 +135,22 @@ def test_top_por_turma_tem_ate_tres_e_turma_sem_resposta_fica_de_fora() -> None:
     assert [a.nome for a in r.por_turma[0][1]] == ["Ana", "Bia", "Caio"]
 
 
-def test_sem_nome_usa_os_ultimos_quatro_digitos_nunca_o_numero() -> None:
-    t = _turma("T", {ANA: None}, [_r(ANA)])
+def test_aluno_leva_o_numero_e_o_nome_salvo_que_pode_faltar() -> None:
+    t = _turma("T", {ANA: None, BIA: "Bia"}, [_r(ANA), _r(ANA), _r(BIA)])
 
-    (aluno,) = _calc([t]).alunos
+    sem_nome, com_nome = _calc([t]).alunos
 
-    assert aluno.nome == "…8888" and ANA not in aluno.nome
+    assert (sem_nome.numero, sem_nome.nome) == (ANA, "")
+    assert (com_nome.numero, com_nome.nome) == (BIA, "Bia")
+
+
+def test_aluno_em_duas_turmas_fica_com_o_nome_que_alguma_turma_conhece() -> None:
+    t1 = _turma("A", {ANA: None}, [_r(ANA)])
+    t2 = _turma("B", {ANA: "Ana"}, [_r(ANA)])
+
+    (aluno,) = _calc([t1, t2]).alunos
+
+    assert aluno.nome == "Ana" and aluno.numero == ANA
 
 
 def test_limites_20_alunos_e_10_turmas() -> None:

@@ -454,7 +454,7 @@ async def test_ranking_devolve_um_pdf_sem_staff_e_sem_telefone() -> None:
     texto = _texto_do_pdf(r)
     assert "Caio" in texto and "Turma B2" in texto and "Adm" not in texto
     assert "1/1" in texto
-    assert ALUNO not in texto
+    assert f"+{ALUNO}" in texto  # o admin vê o número completo (ADR-0061)
 
 
 async def test_ranking_respeita_os_meses_pedidos() -> None:
@@ -466,8 +466,8 @@ async def test_ranking_respeita_os_meses_pedidos() -> None:
     assert "Last month" in texto1 and "Last 6 months" in texto6
     # Caio: 2 respostas no último mês; com 6 meses entra o semanal de 90 dias atrás.
     # (sem espaços: o kerning do PDF separa letras como em "T urma")
-    assert "1CaioTurmaB22201" in "".join(texto1.split())
-    assert "1CaioTurmaB23212" in "".join(texto6.split())
+    assert f"1Caio+{ALUNO}TurmaB221" in "".join(texto1.split())
+    assert f"1Caio+{ALUNO}TurmaB232" in "".join(texto6.split())
 
 
 async def test_ranking_uso_invalido_vazio_e_nao_admin() -> None:
