@@ -627,3 +627,13 @@ def test_a_avaliacao_pede_coerencia_com_a_pergunta_e_nao_cobra_as_palavras() -> 
     assert "coerente com a pergunta no geral" in prompt.sistema
     assert "nunca baixe a nota por não usá-las" in prompt.sistema
     assert "ignora o vocabulário" not in prompt.sistema  # o critério antigo caiu
+
+
+async def test_resposta_do_semanal_registra_o_tipo_para_o_ranking() -> None:
+    m = _turma()
+    await _comecar(m)
+
+    await m.marca_no_grupo(_autor(m, _marcado(m)), "I would ask for help")
+
+    (resposta, *_) = m.banco.do_espaco(GRUPO).listar_respostas()
+    assert resposta.tipo == "semanal"

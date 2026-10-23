@@ -183,6 +183,7 @@ async def responder(d: Deps, sessao: Sessao, perfil: Profile, texto: str) -> Ses
                 autor_id=d.autor_id,
                 marcado=False,
                 qualidade=revisao.qualidade,
+                tipo="diaria",
                 criado_em=agora,
             ),
         )

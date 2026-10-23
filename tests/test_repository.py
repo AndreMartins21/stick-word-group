@@ -766,3 +766,21 @@ def test_professores_adicionar_listar_e_remover(banco: Banco) -> None:
     assert banco.remover_professor("5531999998888") is True
     assert banco.remover_professor("5531999998888") is False
     assert banco.listar_professores() == ["5521977776666"]
+
+
+def test_listar_respostas_desde_corta_as_antigas_e_guarda_o_tipo(repo: Repository) -> None:
+    for quando, tipo in ((T0, "diaria"), (T1, "semanal")):
+        repo.registrar_resposta(
+            Resposta(
+                entry="stall",
+                autor_id="5531999998888",
+                marcado=False,
+                qualidade="bom",
+                tipo=tipo,
+                criado_em=quando,
+            )
+        )
+
+    assert [r.tipo for r in repo.listar_respostas(desde=T1)] == ["semanal"]
+    assert [r.tipo for r in repo.listar_respostas(desde=T0)] == ["diaria", "semanal"]
+    assert len(repo.listar_respostas()) == 2

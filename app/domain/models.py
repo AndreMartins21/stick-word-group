@@ -332,6 +332,8 @@ class Resposta(BaseModel):
     autor_id: str
     marcado: bool
     qualidade: Literal["de_novo", "dificil", "bom", "facil"]
+    # M58 (ADR-0056): de qual atividade veio; `None` nos documentos anteriores ao M58.
+    tipo: Literal["diaria", "semanal"] | None = None
     criado_em: datetime = Field(default_factory=agora_utc)
 
 

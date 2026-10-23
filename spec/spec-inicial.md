@@ -216,7 +216,7 @@ apelidos em PT-BR que a spec sempre teve (`/ajuda`, `/lista`, `/pendentes`, `/pr
   ativos e os pendentes, com o nome e as horas que faltam para o bot sair, e `/groups off N` desativa o
   grupo N da lista; `/admin`, `/admin add NUMERO` e `/admin remove NUMERO` (só o dono) gerenciam os
   admins; `/teachers`, `/teachers add NUMERO` e `/teachers remove NUMERO` (admins e dono, M57, ADR-0055)
-  gerenciam os professores globais. Para quem não pode usá-los, valem como qualquer comando desconhecido.
+  gerenciam os professores globais; `/ranking [meses]` (admins e dono, M58, ADR-0056) mostra o top 20 de alunos, o top 10 de turmas (por interações por aluno matriculado) e o top 3 de cada turma, contando só respostas da revisão diária e do desafio semanal, padrão 6 meses (1 a 24), com staff fora. Para quem não pode usá-los, valem como qualquer comando desconhecido.
 
 ### 5.2b Grupos de turma (M16, ADR-0019)
 
@@ -705,7 +705,7 @@ admins/{numero}            { adicionado_em, adicionado_por }          # M15 (ADR
 grupos_pendentes/{grupo}   { visto_em }   # M15: grupo em que o bot está sem ativação; sai depois de 24h
                            # espacos/{grupo} ganha, ao ativar: ativo, nome?, ativado_por, ativado_em
 espacos/{grupo}/membros/{numero}  { papel:"aluno"|"professor", nome?, entrou_em, marcado_em? }   # M16 (marcado_em: M17)
-espacos/{grupo}/respostas/{auto}  { entry, autor_id, marcado, qualidade, criado_em }              # M17 (marcado é sempre false desde o M35)
+espacos/{grupo}/respostas/{auto}  { entry, autor_id, marcado, qualidade, tipo?:"diaria"|"semanal", criado_em }              # M17 (marcado é sempre false desde o M35)
                            # M17: session/current ganha marcado_id, marcacao_expira_em, marcacao_tentativas; espacos/{grupo}
                            # ganha timeout_em (espelho do prazo, para o agendador)
                            # M36: profile/me ganha semanal_ligada, semanal_dia (0=segunda), semanal_hora, semanal_minuto,
@@ -865,6 +865,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M55 | Jitter nos lembretes do grupo (seção 5.2b/5.7, ADR-0053): `agenda_grupo.jitter_do_espaco` (-20 a +20 min, fixo por grupo e tipo), `proxima_diaria`/`proxima_semanal` com `jitter`, `Agendador(jitter_do_grupo=)`; `!daily`/`!weekly`/`!group` avisam a janela | `make check` passa; o próximo horário do grupo cai entre 18:40 e 19:20 para 19h e é sempre o mesmo para o mesmo grupo; o dia útil escolhido não muda; os textos dizem "around 19:00 (may arrive up to 20 min earlier or later)" |
 | M56 | Contingência do número (seção 10.6b, ADR-0054): `infra/setup_alerta_sessao.sh` (alerta por e-mail quando `waha_status` vai a `FAILED`/`STOPPED`/`SCAN_QR_CODE`) e `docs/runbooks/banimento-do-numero.md` | `make check` passa; `DRY_RUN=1 ALERTA_EMAIL=... bash infra/setup_alerta_sessao.sh` mostra o canal e a política em JSON válido; o runbook cobre re-parear, número reserva, `BOT_NUMBER` e o aviso às turmas |
 | M57 | Professor global (seções 5.2/5.2b/7.1, ADR-0055): coleção `professores/`, `Banco.listar/adicionar/remover_professor`, `!teacher`/`!student` só de admin ou dono e valem em todos os grupos, `Deps.eh_staff`, admin e professor fora do desafio semanal, `/teachers` no privado | `make check` passa; `!teacher` num grupo tira a pessoa do rodízio do semanal de outro grupo; professor e aluno não promovem; `!student` tira de todos; admin do bot nunca é marcado; `/teachers` só para admin/dono; contrato do `Banco` (memória e emulador) |
+| M58 | `/ranking` (seções 5.2/7.1, ADR-0056): `Resposta.tipo`, `Repository.listar_respostas(desde=)`, `app/domain/ranking.py`, `/ranking [meses]` no privado para admin/dono em 3 mensagens | `make check` e `make test-emulador` passam; `/ranking` lista top 20 alunos, top 10 turmas (média por aluno, total e participação) e top 3 por turma; `/ranking 1` corta respostas antigas; staff fora; sem nome aparece `…1234`; `/ranking 0`/`25`/`abc` mostram o uso; não-admin não vê; sem respostas avisa |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 

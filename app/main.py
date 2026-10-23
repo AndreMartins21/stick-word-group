@@ -437,7 +437,8 @@ async def _responder(
         if not payload.has_media and admin.eh_comando_de_admin(payload.body):
             resposta = await admin.comando_privado(acesso, payload.body, numero)
             if resposta is not None:
-                await router.responder_avulso(chat_destino, resposta)
+                for parte in [resposta] if isinstance(resposta, str) else resposta:
+                    await router.responder_avulso(chat_destino, parte)
                 return
         if not aluno:
             # Um admin que não é aluno só usa os comandos de admin: o resto é "sem plano".

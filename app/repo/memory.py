@@ -118,8 +118,12 @@ class MemoryRepository:
     def registrar_resposta(self, resposta: Resposta) -> None:
         self._respostas.append(resposta.model_copy(deep=True))
 
-    def listar_respostas(self) -> list[Resposta]:
-        return [r.model_copy(deep=True) for r in sorted(self._respostas, key=lambda r: r.criado_em)]
+    def listar_respostas(self, desde: datetime | None = None) -> list[Resposta]:
+        return [
+            r.model_copy(deep=True)
+            for r in sorted(self._respostas, key=lambda r: r.criado_em)
+            if desde is None or r.criado_em >= desde
+        ]
 
     def apagar_tudo(self) -> None:
         self._perfil = None

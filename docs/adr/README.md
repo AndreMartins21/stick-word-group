@@ -65,6 +65,7 @@ operacional: numeração, status e o índice.
 | [0053](0053-jitter-nos-lembretes-do-grupo.md) | Jitter de -20 a +20 min nos lembretes diário e semanal de cada grupo | Aceito | 2026-10-12 |
 | [0054](0054-contingencia-do-numero-do-bot.md) | Contingência para sessão caída ou número banido: alerta por e-mail e runbook | Aceito | 2026-10-12 |
 | [0055](0055-professor-global-e-staff-fora-do-semanal.md) | Professor global (`!teacher` vale em todos os grupos, só admin/dono promove) e staff fora do desafio semanal | Aceito | 2026-10-22 |
+| [0056](0056-ranking-de-engajamento-para-admins.md) | `/ranking [meses]` para admins: alunos e turmas mais engajados (daily/weekly), turmas por média por aluno | Aceito | 2026-10-22 |
 
 ## Quando escrever um
 

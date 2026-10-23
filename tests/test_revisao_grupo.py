@@ -119,6 +119,7 @@ async def test_qualquer_aluno_responde_e_a_resposta_aceitavel_vale_a_nota_e_avan
     assert reagendada is not None and reagendada.proxima_revisao is not None
     assert reagendada.proxima_revisao > T0
     (resposta,) = repo.listar_respostas()
+    assert resposta.tipo == "diaria"
     assert (resposta.autor_id, resposta.marcado, resposta.qualidade) == (BIA.numero, False, "bom")
 
 

@@ -161,8 +161,11 @@ class FirestoreRepository:
     def registrar_resposta(self, resposta: Resposta) -> None:
         self._raiz.collection("respostas").add(resposta.model_dump())
 
-    def listar_respostas(self) -> list[Resposta]:
-        documentos = self._raiz.collection("respostas").order_by("criado_em").stream()
+    def listar_respostas(self, desde: datetime | None = None) -> list[Resposta]:
+        consulta = self._raiz.collection("respostas")
+        if desde is not None:
+            consulta = consulta.where(filter=FieldFilter("criado_em", ">=", desde))
+        documentos = consulta.order_by("criado_em").stream()
         return [Resposta.model_validate(d.to_dict()) for d in documentos]
 
     def apagar_tudo(self) -> None:

@@ -21,6 +21,7 @@ from app import messages
 from app.channel.base import Channel
 from app.channel.parser import numero_esta_na_lista
 from app.domain.choices import normalizar
+from app.domain.ranking import Turma, calcular, meses_atras
 from app.flows.base import bloq
 from app.logging_config import id_curto, registrar_evento
 from app.repo.base import Banco
@@ -142,16 +143,21 @@ def _comando_privado(texto: str, prefixo: str = "!") -> tuple[str, list[str]] | 
             break
     else:
         return None
-    return (comando, partes[1:]) if comando in {"groups", "grupos", "admin", "teachers"} else None
+    return (
+        (comando, partes[1:])
+        if comando in {"groups", "grupos", "admin", "teachers", "ranking"}
+        else None
+    )
 
 
 def eh_comando_de_admin(texto: str, prefixo: str = "!") -> bool:
     return _comando_privado(texto, prefixo) is not None
 
 
-async def comando_privado(a: Acesso, texto: str, numero: str) -> str | None:
-    """A resposta a `/groups` ou `/admin`, ou `None` se o texto não é um desses comandos OU quem
-    escreveu não pode usá-lo (então o chamador trata como um texto qualquer)."""
+async def comando_privado(a: Acesso, texto: str, numero: str) -> str | list[str] | None:
+    """A resposta a `/groups`, `/admin`, `/teachers` ou `/ranking` (uma lista quando são várias
+    mensagens), ou `None` se o texto não é um desses comandos OU quem escreveu não pode usá-lo
+    (então o chamador trata como um texto qualquer)."""
     achado = _comando_privado(texto, a.prefixo)
     if achado is None:
         return None
@@ -162,6 +168,8 @@ async def comando_privado(a: Acesso, texto: str, numero: str) -> str | None:
         return await bloq(_admin, a, argumentos, so_digitos(numero))
     if not await bloq(eh_admin, a, numero):
         return None
+    if comando == "ranking":
+        return await _ranking(a, argumentos)
     if comando == "teachers":
         return await bloq(_professores, a, argumentos, so_digitos(numero))
     return await _grupos(a, argumentos)
@@ -206,6 +214,51 @@ def _professores(a: Acesso, argumentos: list[str], por: str) -> str:
     if existente is None or not a.banco.remover_professor(existente):
         return messages.PROFESSOR_NAO_E
     return messages.PROFESSOR_REMOVIDO
+
+
+RANKING_MESES_PADRAO = 6
+RANKING_MESES_MAXIMO = 24
+
+
+async def _ranking(a: Acesso, argumentos: list[str]) -> str | list[str]:
+    """`/ranking [meses]` (M58, ADR-0056): os alunos e as turmas mais engajados do período."""
+    meses = RANKING_MESES_PADRAO
+    if argumentos:
+        if len(argumentos) != 1 or not argumentos[0].isdigit():
+            return messages.RANKING_USO
+        meses = int(argumentos[0])
+        if not 1 <= meses <= RANKING_MESES_MAXIMO:
+            return messages.RANKING_USO
+    desde = meses_atras(a.agora(), meses)
+    professores = await bloq(a.banco.listar_professores)
+    admins = await bloq(a.banco.listar_admins)
+
+    def eh_staff(numero: str) -> bool:
+        return (
+            a.eh_dono(numero)
+            or numero_esta_na_lista(numero, admins)
+            or numero_esta_na_lista(numero, professores)
+        )
+
+    turmas: list[Turma] = []
+    for grupo in await bloq(a.banco.listar_grupos_ativos):
+        repo = a.banco.do_espaco(grupo.id)
+        nome = grupo.nome or await a.canal.group_name(grupo.id) or "Group"
+        turmas.append(
+            Turma(
+                nome=nome,
+                membros=await bloq(repo.listar_membros),
+                respostas=await bloq(repo.listar_respostas, desde),
+            )
+        )
+    ranking = calcular(turmas, eh_staff=eh_staff)
+    if ranking.vazio:
+        return messages.ranking_vazio(meses)
+    return [
+        messages.ranking_alunos(ranking.alunos, meses),
+        messages.ranking_turmas(ranking.turmas, meses),
+        messages.ranking_por_turma(ranking.por_turma),
+    ]
 
 
 async def _grupos(a: Acesso, argumentos: list[str]) -> str:

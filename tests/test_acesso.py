@@ -392,3 +392,71 @@ async def test_teachers_rejeita_lixo_e_nao_admin_nao_usa() -> None:
     assert await comando_privado(a, f"/teachers add {ALUNO}", ALUNO) is None
     assert banco.listar_professores() == []
     assert eh_comando_de_admin("/teachers")
+
+
+# --- /ranking (admin ou dono; M58, ADR-0056) --------------------------------------------------
+
+
+def _com_respostas() -> tuple[Acesso, MemoryBanco]:
+    from app.domain.models import Membro, Resposta
+
+    a, banco, _ = _acesso()
+    banco.ativar_grupo(GRUPO, nome="Turma B2", por=DONO, agora=T0)
+    repo = banco.do_espaco(GRUPO)
+    repo.salvar_membro(ALUNO, Membro(nome="Caio", entrou_em=T0))
+    repo.salvar_membro(ADMIN, Membro(nome="Adm", entrou_em=T0))
+    for autor, quando in ((ALUNO, T0), (ALUNO, T0), (ADMIN, T0)):
+        repo.registrar_resposta(
+            Resposta(
+                entry="w",
+                autor_id=autor,
+                marcado=False,
+                qualidade="bom",
+                tipo="diaria",
+                criado_em=quando,
+            )
+        )
+    repo.registrar_resposta(  # fora da janela de 1 mês
+        Resposta(
+            entry="w",
+            autor_id=ALUNO,
+            marcado=False,
+            qualidade="bom",
+            tipo="semanal",
+            criado_em=T0 - timedelta(days=90),
+        )
+    )
+    return a, banco
+
+
+async def test_ranking_manda_tres_mensagens_sem_staff_e_sem_telefone() -> None:
+    a, _ = _com_respostas()
+
+    r = await comando_privado(a, "/ranking", ADMIN)
+
+    assert isinstance(r, list) and len(r) == 3
+    assert "Caio" in r[0] and "Turma B2" in r[0] and "Adm" not in r[0]
+    assert "Turma B2" in r[1] and "1/1 active" in r[1]
+    assert "*Turma B2*" in r[2]
+    assert all(ALUNO not in parte for parte in r)
+
+
+async def test_ranking_respeita_os_meses_pedidos() -> None:
+    a, _ = _com_respostas()
+
+    r1 = await comando_privado(a, "/ranking 1", ADMIN)
+    r6 = await comando_privado(a, "/ranking 6", ADMIN)
+
+    assert isinstance(r1, list) and "— 2 (daily 2 · weekly 0)" in r1[0]
+    assert isinstance(r6, list) and "— 3 (daily 2 · weekly 1)" in r6[0]
+
+
+async def test_ranking_uso_invalido_vazio_e_nao_admin() -> None:
+    a, _ = _com_respostas()
+
+    for ruim in ("/ranking 0", "/ranking 25", "/ranking abc", "/ranking 1 2"):
+        assert await comando_privado(a, ruim, ADMIN) == messages.RANKING_USO
+    assert await comando_privado(a, "/ranking", ALUNO) is None
+    sem, _, _ = _acesso()
+    assert await comando_privado(sem, "/ranking 3", DONO) == messages.ranking_vazio(3)
+    assert eh_comando_de_admin("/ranking")

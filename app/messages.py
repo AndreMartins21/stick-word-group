@@ -30,6 +30,8 @@ from app.domain.models import (
     Synonym,
     Veredito,
 )
+from app.domain.ranking import LinhaAluno as RankingAluno
+from app.domain.ranking import LinhaTurma as RankingTurma
 
 MIDIA_NAO_SUPORTADA = "📎 I can only read *text* for now — can you type the word instead? 🙂"
 ERRO_INESPERADO = "⚠️ Something went wrong on my end. Try again in a bit?"
@@ -825,6 +827,55 @@ def admin_lista(numeros: Sequence[str]) -> str:
     linhas = [f"👑 *Admins* ({len(numeros) + 1})", "• you (owner)"]
     linhas += [f"• {n}" for n in numeros]
     linhas.append("Add one with /admin add 5531999998888.")
+    return "\n".join(linhas)
+
+
+# --- /ranking (M58, ADR-0056) -------------------------------------------------------------------
+
+RANKING_USO = "Use /ranking for the last 6 months, or /ranking 3 for the last 3 months (1 to 24)."
+_MEDALHAS = {1: "🥇", 2: "🥈", 3: "🥉"}
+
+
+def _periodo(meses: int) -> str:
+    return "last month" if meses == 1 else f"last {meses} months"
+
+
+def ranking_vazio(meses: int) -> str:
+    return f"📊 No daily or weekly answers in the {_periodo(meses)} yet."
+
+
+def _posicao(i: int) -> str:
+    return _MEDALHAS.get(i, f"{i}.")
+
+
+def ranking_alunos(alunos: Sequence[RankingAluno], meses: int) -> str:
+    linhas = [f"🏅 *Top {len(alunos)} students* · {_periodo(meses)}"]
+    for i, a in enumerate(alunos, 1):
+        turmas = ", ".join(a.turmas)
+        linhas.append(
+            f"{_posicao(i)} {a.nome} ({turmas}) — {a.total} "
+            f"(daily {a.diarias} · weekly {a.semanais}) · {a.dias} active days"
+        )
+    linhas.append("_Answers in the daily review and the weekly challenge. Teachers are left out._")
+    return "\n".join(linhas)
+
+
+def ranking_turmas(turmas: Sequence[RankingTurma], meses: int) -> str:
+    linhas = [f"🏫 *Top {len(turmas)} classes* · {_periodo(meses)}"]
+    for i, t in enumerate(turmas, 1):
+        linhas.append(
+            f"{_posicao(i)} {t.nome} — {t.por_aluno:.1f} per student · {t.total} total · "
+            f"{t.ativos}/{t.alunos} active"
+        )
+    linhas.append("_Ordered by answers per enrolled student, so small classes compete fairly._")
+    return "\n".join(linhas)
+
+
+def ranking_por_turma(por_turma: Sequence[tuple[str, Sequence[RankingAluno]]]) -> str:
+    linhas = ["⭐ *Most engaged in each class*"]
+    for nome, alunos in por_turma:
+        linhas.append(f"*{nome}*")
+        linhas += [f"{_posicao(i)} {a.nome} — {a.total}" for i, a in enumerate(alunos, 1)]
     return "\n".join(linhas)
 
 

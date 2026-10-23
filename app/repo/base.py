@@ -83,8 +83,8 @@ class Repository(Protocol):
 
     def registrar_resposta(self, resposta: Resposta) -> None: ...
 
-    def listar_respostas(self) -> list[Resposta]:
-        """Em ordem de criação."""
+    def listar_respostas(self, desde: datetime | None = None) -> list[Resposta]:
+        """Em ordem de criação. Com `desde` (M58), só as de `criado_em >= desde`."""
         ...
 
     def apagar_tudo(self) -> None:

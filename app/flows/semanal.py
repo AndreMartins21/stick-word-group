@@ -139,6 +139,7 @@ async def responder(d: Deps, sessao: Sessao, perfil: Profile, texto: str) -> Ses
                 autor_id=d.autor_id,
                 marcado=marcada,
                 qualidade=avaliacao.qualidade,
+                tipo="semanal",
                 criado_em=d.agora(),
             ),
         )
