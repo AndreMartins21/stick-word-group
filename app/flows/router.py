@@ -139,13 +139,17 @@ class Router:
             chat_id=chat_id,
             grupo_cfg=self._config_grupo,
             eh_staff=self._eh_staff,
+            eh_admin=self._eh_dono_ou_admin,
             banco=self._banco,
         )
+
+    def _eh_dono_ou_admin(self, numero: str) -> bool:
+        return self._eh_dono(numero) or (self._eh_admin is not None and self._eh_admin(numero))
 
     def _eh_staff(self, numero: str) -> bool:
         """Dono, admin do bot ou professor global (M57, ADR-0055). Síncrono (lê o banco, com o
         cache curto do ADR-0046)."""
-        if self._eh_dono(numero) or (self._eh_admin is not None and self._eh_admin(numero)):
+        if self._eh_dono_ou_admin(numero):
             return True
         return numero_esta_na_lista(numero, self._banco.listar_professores())
 

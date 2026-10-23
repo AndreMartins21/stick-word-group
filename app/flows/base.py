@@ -65,6 +65,8 @@ class Deps:
     so_ingles: bool = False  # M34: grupo de B1-B2 para cima não vê português
     # M57 (ADR-0055): dono, admin do bot ou professor global — nunca marcado no desafio semanal.
     eh_staff: Callable[[str], bool] = lambda _numero: False
+    # M61: dono ou admin do bot (staff que não é "professor"): o `!group` o rotula como admin.
+    eh_admin: Callable[[str], bool] = lambda _numero: False
     banco: Banco | None = None  # M57: a raiz, para os professores globais (`!teacher`/`!student`)
 
     @property

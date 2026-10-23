@@ -396,7 +396,10 @@ async def _papel(
     for numero in alvos:
         papel = await bloq(_papel_a_aplicar, d, numero, comando)
         membro = await bloq(_definir_papel, d, numero, papel, autor.numero)
-        await d.conversa.enviar(messages.papel_alterado(membro.nome, papel))
+        if papel == "aluno" and await bloq(d.eh_admin, numero):
+            await d.conversa.enviar(messages.papel_alterado_admin(membro.nome))
+        else:
+            await d.conversa.enviar(messages.papel_alterado(membro.nome, papel))
     return sessao
 
 
@@ -421,6 +424,7 @@ async def _perfil_do_grupo(d: Deps, perfil: Profile) -> None:
         por_autor[r.autor_id] = por_autor.get(r.autor_id, 0) + 1
 
     staff = await bloq(lambda: {n for n, _ in membros if d.eh_staff(n)})
+    admins = await bloq(lambda: {n for n, _ in membros if d.eh_admin(n)})
     linhas: list[tuple[str, str, int]] = []
     sem_nome = 0
     for numero, membro in membros:
@@ -430,7 +434,12 @@ async def _perfil_do_grupo(d: Deps, perfil: Profile) -> None:
             sem_nome += 1
             nome = f"Student {sem_nome}"
         # M57: dono, admin e professor global também são staff aqui (nunca marcados no semanal).
-        papel = "professor" if membro.papel == "professor" or numero in staff else "aluno"
+        if numero in admins:
+            papel = "admin"  # M61: staff, mas não "professor": `!student` não o tira daqui
+        elif membro.papel == "professor" or numero in staff:
+            papel = "professor"
+        else:
+            papel = "aluno"
         linhas.append((nome, papel, por_autor.get(numero, 0)))
 
     if not perfil.diaria_ligada:

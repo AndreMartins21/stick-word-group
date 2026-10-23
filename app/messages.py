@@ -977,6 +977,15 @@ def papel_alterado(nome: str | None, papel: str) -> str:
     return f"✅ {quem} is now a {'teacher' if papel == 'professor' else 'student'}."
 
 
+def papel_alterado_admin(nome: str | None) -> str:
+    """`!student` em quem é admin do bot: deixa de ser professor, mas admin é staff (M61)."""
+    quem = nome or "That person"
+    return (
+        f"✅ {quem} is no longer a teacher. They are a bot admin, though, so they still skip "
+        "the daily and weekly challenges."
+    )
+
+
 def papel_uso(comando: str, p: str = "!") -> str:
     extra = " Repeat it for a teacher to make them a student again." if comando == "teacher" else ""
     return (
@@ -1006,7 +1015,7 @@ def grupo_perfil(
     if membros:
         linhas.append(f"👥 *Members* ({len(membros)})")
         for nome, papel, respostas in membros:
-            rotulo = "teacher" if papel == "professor" else "student"
+            rotulo = {"professor": "teacher", "admin": "admin"}.get(papel, "student")
             extra = f" · {respostas} review answers" if respostas else ""
             linhas.append(f"• {nome} ({rotulo}){extra}")
     else:

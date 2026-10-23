@@ -162,3 +162,23 @@ async def test_student_num_grupo_rebaixa_nos_outros_grupos_tambem() -> None:
 
     assert repo2.obter_membro(ANA.numero).papel == "aluno"  # type: ignore[union-attr]
     assert m.banco.listar_professores() == []
+
+
+async def test_group_mostra_admin_como_admin_e_nao_como_teacher() -> None:
+    """Admin é staff (fora do semanal), mas não é "professor": o `!group` diz o que ele é, senão
+    um `!student` nele parece não ter funcionado."""
+    m = _turma(admins=(ANA.numero,))
+
+    (perfil,) = await m.diz_no_grupo(BIA, "!group")
+
+    assert "• Ana (admin)" in perfil
+    assert "• Bia (student)" in perfil
+
+
+async def test_student_num_admin_avisa_que_ele_continua_admin() -> None:
+    m = _turma(admins=(ANA.numero,))
+
+    (resposta,) = await m.diz_no_grupo(DONO, f"!student {ANA.numero}")
+
+    assert resposta == messages.papel_alterado_admin("Ana")
+    assert "• Ana (admin)" in (await m.diz_no_grupo(BIA, "!group"))[0]

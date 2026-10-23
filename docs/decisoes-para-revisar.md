@@ -10,6 +10,7 @@ Decisões que tomei sozinho enquanto você estava fora. Cada uma tem ADR; aqui s
 | M58 | #55 | `/ranking [meses]` para admins (ADR-0056) |
 | M59 | #56 | `!teacher` alterna; `/teachers N` e `/teacher N` valem (ADR-0057) |
 | M60 | #57 | Bug do `/group`: rebaixar limpa o papel em todos os grupos (ADR-0058) |
+| M61 | — | `/group` mostra admin/dono como `admin` (não `teacher`) e `!student` neles avisa que continuam admin (ADR-0059) |
 
 ## Decisões minhas (reveja)
 
