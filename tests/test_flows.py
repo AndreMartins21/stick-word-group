@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Any
 
 from app.domain.models import Estado, Explanation, Roteamento, Sense, Synonym
-from app.flows.base import Autor
 from app.services.fake_llm import FakeTutor
 from app.services.llm import LLMError
-from tests.helpers import CHAT, avaliacao, expansoes, explicacao_stall, montar
+from tests.helpers import CHAT, Montagem, avaliacao, expansoes, explicacao_stall
+from tests.helpers import montar as _montar
+
+
+def montar(**kwargs: Any) -> Montagem:
+    """Uma turma A2-B1, que vê a linha 🇧🇷 (ADR-0032)."""
+    return _montar(**{"nivel_padrao": "A2-B1", **kwargs})
+
 
 EXEMPLOS = ["The talks [[stalled]] again.", "My car [[stalled]].", "Don't [[stall]] me."]
 SINONIMOS = [
@@ -64,9 +71,9 @@ async def test_ciclo_completo_do_stall() -> None:
         '"The talks stalled."\n'
         "\n"
         "↔️ enrolar — to delay on purpose\n"
-        "Want another meaning? Send *stall | to delay on purpose*\n"
+        "Want another meaning? Tag me with *stall | to delay on purpose*\n"
         "\n"
-        "Now, you can write one or more sentences using *stall*, or type:\n"
+        "Now, tag me with a sentence using *stall*, or tag me with a number:\n"
         "2️⃣ See more examples\n"
         "3️⃣ Check synonyms\n"
         "4️⃣ Just save\n"
@@ -97,7 +104,7 @@ async def test_ciclo_completo_do_stall() -> None:
         '💬 After "didn\'t", the verb stays in the base form.\n'
         "\n"
         "Want to try another sentence?\n"
-        "Now, you can write one or more sentences using *stall*, or type:\n"
+        "Now, tag me with a sentence using *stall*, or tag me with a number:\n"
         "2️⃣ See more examples\n"
         "3️⃣ See more synonyms\n"
         "4️⃣ Just save\n"
@@ -111,28 +118,16 @@ async def test_ciclo_completo_do_stall() -> None:
     (salvo,) = await m.diz("4")
     assert salvo == (
         "✅ Saved: *stall*.\n"
-        "Practice it any time with /practice stall, or see everything with /list.\n"
+        "Practice it any time with !practice stall, or see everything with !list.\n"
         "You might like these too: *stall for time*, *stall out*, *stalled talks*.\n"
-        "Send me another word or expression whenever you want."
+        "Add another one whenever you want: tag me with a word."
     )
     assert m.repo.obter_sessao().estado == Estado.IDLE
     # Nenhuma entrada de expansão foi criada sozinha (M9: é só sugestão em texto).
     assert len(m.repo.listar_entradas()) == 1
 
     chamadas = dict(m.tutor.chamadas)
-    assert chamadas["explain"] == ("stall | the talks stalled", "B1-B2")
-
-
-async def test_dica_de_lembretes_so_aparece_com_lembretes_desligados() -> None:
-    """M24: os lembretes agora vêm ligados por padrão, então a dica de uma linha só faz sentido
-    para quem desligou antes de salvar a primeira palavra."""
-    m = montar(tutor=FakeTutor(explicacoes=[explicacao_stall()], expansoes=[expansoes()]))
-    await m.diz("stall")
-    await m.diz("/reminders off")
-
-    (salvo,) = await m.diz("4")
-
-    assert "Want daily practice reminders? Send /reminders 3" in salvo
+    assert chamadas["explain"] == ("stall | the talks stalled", "A2-B1")
 
 
 async def test_frase_logo_apos_o_card_e_roteada_sem_passar_pelo_menu() -> None:
@@ -205,7 +200,7 @@ async def test_sinonimos_nao_repetidos_entre_chamadas() -> None:
     chamadas = [c for c in m.tutor.chamadas if c[0] == "synonyms"]
     assert len(chamadas) == 2
     # a 2ª chamada recebe o sinônimo já mostrado, para o tutor não repeti-lo
-    assert chamadas[1][1] == ("stall", "travar, emperrar", "B1-B2", 3)
+    assert chamadas[1][1] == ("stall", "travar, emperrar", "A2-B1", 3)
 
 
 # ---- outras intenções do roteamento -----------------------------------------------------------
@@ -383,37 +378,6 @@ async def test_o_nivel_do_perfil_vai_para_a_ia() -> None:
     assert m.tutor.chamadas[0] == ("explain", ("stall", "A2-B1"))
 
 
-async def test_perfil_privado_guarda_o_nome_do_whatsapp() -> None:
-    """M28 (spec 12): `Profile.nome` (nunca o telefone), atualizado se o nome mudar."""
-    m = montar()
-
-    await m.router.processar("/ajuda", CHAT, Autor(numero="5531999998888", nome="Ana"))
-    await m.router.processar("/ajuda", CHAT, Autor(numero="5531999998888", nome="Ana Nova"))
-
-    assert m.repo.obter_perfil().nome == "Ana Nova"  # type: ignore[union-attr]
-
-
-async def test_entrada_no_privado_nunca_tem_autor_id() -> None:
-    m = montar(tutor=FakeTutor(explicacoes=[explicacao_stall()]))
-
-    await m.router.processar("stall", CHAT, Autor(numero="5531999998888", nome="Ana"))
-
-    (entrada,) = m.repo.listar_entradas()
-    assert entrada.autor_id is None
-
-
-async def test_a_resposta_vai_para_o_chat_de_quem_escreveu() -> None:
-    m = montar()
-
-    await m.router.processar("/ajuda", "553199998888@c.us")
-    await m.router.processar("/ajuda", "5511988887777@c.us")
-
-    assert [chat for chat, _ in m.channel.textos_enviados] == [
-        "553199998888@c.us",
-        "5511988887777@c.us",
-    ]
-
-
 async def test_sinonimos_ficam_salvos_na_entrada_sem_duplicar() -> None:
     m = montar(
         tutor=FakeTutor(
@@ -450,13 +414,13 @@ async def test_palavra_que_ja_existe_avisa_e_mostra_o_que_o_aluno_tem() -> None:
         '"The talks stalled."\n'
         "\n"
         "↔️ enrolar — to delay on purpose\n"
-        "Want another meaning? Send *stall | to delay on purpose*\n"
+        "Want another meaning? Tag me with *stall | to delay on purpose*\n"
         "\n"
-        "Now, you can write one or more sentences using *stall*, or type:\n"
+        "Now, tag me with a sentence using *stall*, or tag me with a number:\n"
         "2️⃣ See more examples\n"
         "3️⃣ Check synonyms\n"
         "\n"
-        "To send another word or command, type 0 or skip."
+        "To send another word or command, type !0 or !skip."
     )
     sessao = m.repo.obter_sessao()
     assert (sessao.estado, sessao.entry_id) == (Estado.AWAIT_ACTION, "stall")
@@ -682,4 +646,4 @@ async def test_aviso_de_palavra_que_ja_existe_lista_os_outros_sentidos() -> None
 
     assert resposta.startswith("📌 You already have *stall* in your list.")
     assert "↔️ enrolar — to delay on purpose" in resposta
-    assert "Want another meaning? Send *stall | to delay on purpose*" in resposta
+    assert "Want another meaning? Tag me with *stall | to delay on purpose*" in resposta

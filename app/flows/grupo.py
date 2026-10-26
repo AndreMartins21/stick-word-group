@@ -324,13 +324,12 @@ async def _diaria(
             return
         perfil = perfil.model_copy(update={**mudancas, "proxima_diaria": None})
         await bloq(d.repo.salvar_perfil, perfil)
-    entradas = await bloq(d.repo.listar_entradas)
     await d.conversa.enviar(
         messages.diaria_estado(
             perfil,
             diaria_a_exibir(perfil, d.agora(), d.fuso, jitter_do_espaco(d.chat_id, "diaria")),
             d.agora(),
-            review.limite(d, perfil, len(entradas)),
+            review.limite(d, perfil),
             d.p,
             alterada=bool(argumento),
         )

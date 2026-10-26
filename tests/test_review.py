@@ -3,18 +3,23 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timedelta
+from typing import Any
 
-import pytest
-
-from app.domain.models import Entry, Estado, Revisao, SentidoSalvo
+from app.domain.models import Entry, Revisao, SentidoSalvo
 from app.flows.review import montar_fila
 from app.services.audio import ServicoAudio
 from app.services.fake_llm import FakeTutor
 from app.services.fake_tts import FakeSintetizador
 from app.services.storage import CacheAudioEmMemoria
-from tests.helpers import CHAT, T0, Montagem, eventos, montar
+from tests.helpers import T0, Montagem
+from tests.helpers import montar as _montar
+
+
+def montar(**kwargs: Any) -> Montagem:
+    """Uma turma A2-B1, que vê a linha 🇧🇷 (ADR-0032)."""
+    return _montar(**{"nivel_padrao": "A2-B1", **kwargs})
+
 
 SENTIDO = SentidoSalvo(traducao="travar", definicao="to stop making progress")
 
@@ -81,97 +86,6 @@ async def _com_stall_e_hedge_vencidas() -> Montagem:
     return m
 
 
-async def test_revisar_sem_nada_pendente() -> None:
-    m = montar()
-
-    (resposta,) = await m.diz("/revisar")
-
-    assert "No pending reviews" in resposta
-
-
-async def test_ciclo_completo_de_revisao() -> None:
-    m = await _com_stall_e_hedge_vencidas()
-
-    (primeira,) = await m.diz("/revisar")
-    assert primeira == (
-        "⏰ *Practice time* — 2 words to review.\n\n"
-        "🔁 1/2 · *stall*\n"
-        "Explain it in English in your own words, or write a sentence using it.\n\n"
-        "_Type 0 to leave the practice._"
-    )
-    assert m.repo.obter_sessao().estado == Estado.REVIEWING
-    assert m.repo.obter_sessao().revisao_atual == "stall"
-
-    m.tutor.revisoes.append(
-        Revisao(tipo="definicao", qualidade="bom", feedback="That's exactly right.")
-    )
-    (segunda,) = await m.diz("to stop making progress")
-    assert segunda == (
-        "✅ That's exactly right.\n\n"
-        "🔁 2/2 · *hedge*\n"
-        "Explain it in English in your own words, or write a sentence using it.\n\n"
-        "_Type 0 to leave the practice._"
-    )
-    entrada_stall = m.repo.obter_entrada("stall")
-    assert entrada_stall is not None
-    assert entrada_stall.repeticoes == 1
-    assert entrada_stall.proxima_revisao == T0 + timedelta(days=1)
-
-    (terceira,) = await m.diz("0")
-    assert terceira.startswith("🎉 *Practice done* — 1 reviewed.")
-    assert "✅ Solid: stall" in terceira
-    assert "Send me a new word" in terceira
-    assert m.repo.obter_sessao().estado == Estado.IDLE
-
-
-async def test_de_novo_volta_para_o_fim_da_fila_da_sessao() -> None:
-    m = await _com_stall_e_hedge_vencidas()
-    m.tutor.revisoes = [
-        Revisao(tipo="nao_sei", qualidade="de_novo", feedback="No worries, let's see it again."),
-        Revisao(tipo="definicao", qualidade="bom", feedback="Got it."),
-        Revisao(tipo="definicao", qualidade="bom", feedback="Good."),
-    ]
-    await m.diz("/revisar")
-
-    (apos_de_novo,) = await m.diz("I don't know")
-    assert "No worries" in apos_de_novo
-    assert "🔁 2/2 · *hedge*" in apos_de_novo
-
-    (apos_hedge,) = await m.diz("to protect against loss")
-    # stall voltou para o fim da fila desta sessão: aparece de novo.
-    assert "*stall*" in apos_hedge
-
-    entrada_stall = m.repo.obter_entrada("stall")
-    assert entrada_stall is not None
-    assert entrada_stall.lapsos == 1
-    assert entrada_stall.repeticoes == 0
-
-    (resumo,) = await m.diz("the talks stalled")
-    assert "🎉 *Practice done*" in resumo
-    assert "🔁 Coming back soon: stall" in resumo
-
-
-async def test_entrada_apagada_no_meio_da_revisao_e_pulada() -> None:
-    m = await _com_stall_e_hedge_vencidas()
-    m.tutor.revisoes = [Revisao(tipo="definicao", qualidade="bom", feedback="Nice.")]
-    await m.diz("/revisar")
-
-    m.repo.apagar_entrada("hedge")
-
-    (resposta,) = await m.diz("to stop making progress")
-    assert "🎉 *Practice done*" in resposta
-
-
-async def test_cancelar_durante_a_revisao_fecha_com_o_resumo() -> None:
-    m = await _com_stall_e_hedge_vencidas()
-    await m.diz("/revisar")
-
-    (resposta,) = await m.diz("/cancelar")
-
-    assert "🎉 *Practice done*" in resposta or "No pending reviews" in resposta
-    assert m.repo.obter_sessao().estado == Estado.IDLE
-
-
 async def test_frase_da_revisao_guarda_a_versao_corrigida() -> None:
     m = await _com_stall_e_hedge_vencidas()
     await m.diz("/review")
@@ -201,42 +115,6 @@ async def _com_dez_palavras_vencidas() -> Montagem:
     return m
 
 
-async def test_tamanho_dinamico_da_fila_e_o_menor_entre_as_palavras_e_sete() -> None:
-    m = await _com_dez_palavras_vencidas()
-
-    (primeira,) = await m.diz("/revisar")
-
-    assert primeira.startswith("⏰ *Practice time* — 7 words to review.")
-
-
-async def test_reviewsize_fixa_um_tamanho_menor_que_o_padrao() -> None:
-    m = await _com_dez_palavras_vencidas()
-    await m.diz("/reviewsize 3")
-
-    (primeira,) = await m.diz("/revisar")
-
-    assert primeira.startswith("⏰ *Practice time* — 3 words to review.")
-
-
-async def test_reviewsize_fixa_um_tamanho_maior_que_o_padrao_dinamico() -> None:
-    m = await _com_dez_palavras_vencidas()
-    await m.diz("/reviewsize 9")
-
-    (primeira,) = await m.diz("/revisar")
-
-    assert primeira.startswith("⏰ *Practice time* — 9 words to review.")
-
-
-async def test_reviewsize_auto_volta_ao_dinamico() -> None:
-    m = await _com_dez_palavras_vencidas()
-    await m.diz("/reviewsize 3")
-    await m.diz("/reviewsize auto")
-
-    (primeira,) = await m.diz("/revisar")
-
-    assert primeira.startswith("⏰ *Practice time* — 7 words to review.")
-
-
 # ---- pronúncia automática no privado (M26, ADR-0027) --------------------------------------------
 
 VOZ = "en-US-Neural2-F"
@@ -250,15 +128,6 @@ async def _com_stall_e_hedge_vencidas_e_audio() -> Montagem:
     return m
 
 
-async def test_cada_card_de_revisao_manda_so_o_termo_em_audio() -> None:
-    m = await _com_stall_e_hedge_vencidas_e_audio()
-
-    await m.diz("/revisar")
-
-    # só o termo (com_frase=False): a entrada não tem frase salva além do próprio card de revisão
-    assert m.channel.vozes_enviadas == [(CHAT, b"ogg:stall")]
-
-
 async def test_o_audio_da_revisao_fica_em_silencio_sem_servico_configurado() -> None:
     m = await _com_stall_e_hedge_vencidas()
 
@@ -269,55 +138,3 @@ async def test_o_audio_da_revisao_fica_em_silencio_sem_servico_configurado() -> 
 
 
 # --- eventos estruturados (M27, ADR-0028, seção 12 da spec) -------------------------------------
-
-
-async def test_cada_resposta_registra_revisao_resposta_sem_marcado_no_privado(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    m = await _com_stall_e_hedge_vencidas()
-    await m.diz("/revisar")
-    m.tutor.revisoes.append(
-        Revisao(tipo="definicao", qualidade="bom", feedback="That's exactly right.")
-    )
-
-    with caplog.at_level(logging.INFO):
-        await m.diz("to stop making progress")
-
-    (evento,) = eventos(caplog.records, "revisao_resposta")
-    assert evento.qualidade == "bom"
-    assert evento.tipo_espaco == "privado"
-    assert not hasattr(evento, "marcado")  # só faz sentido em grupo
-
-
-async def test_cancelar_registra_revisao_concluida_com_motivo_manual(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    m = await _com_stall_e_hedge_vencidas()
-    await m.diz("/revisar")
-
-    with caplog.at_level(logging.INFO):
-        await m.diz("0")
-
-    (evento,) = eventos(caplog.records, "revisao_concluida")
-    assert evento.motivo == "manual"
-    assert evento.n == 0
-    assert evento.total == 2
-
-
-async def test_fila_esgotada_sem_digitar_0_registra_motivo_fila_vazia(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    m = await _com_stall_e_hedge_vencidas()
-    m.tutor.revisoes = [
-        Revisao(tipo="definicao", qualidade="bom", feedback="Got it."),
-        Revisao(tipo="definicao", qualidade="bom", feedback="Good."),
-    ]
-    await m.diz("/revisar")
-    await m.diz("to stop making progress")
-
-    with caplog.at_level(logging.INFO):
-        await m.diz("to protect against loss")  # esgota a fila sem digitar 0
-
-    (evento,) = eventos(caplog.records, "revisao_concluida")
-    assert evento.motivo == "fila_vazia"
-    assert evento.n == 2

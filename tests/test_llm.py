@@ -18,7 +18,6 @@ from app.domain.models import (
     Exemplos,
     Expansion,
     Explanation,
-    LinhaDaMusica,
     Roteamento,
     Sense,
     SentidoSalvo,
@@ -302,36 +301,6 @@ def test_route_usa_o_modelo_de_avaliacao() -> None:
     assert "let's save it" in provider.chamadas[0].usuario
 
 
-def test_song_line_usa_o_modelo_de_avaliacao_e_delimita_a_resposta() -> None:
-    # Verso inventado (ADR-0016: nunca letra real em teste).
-    provider = FakeLLMProvider(
-        [LinhaDaMusica(compreensao="parcial", feedback="Close!", expressoes=["hold on"])]
-    )
-
-    resultado = _tutor(provider).song_line(
-        "Paper Plane",
-        "The Inventors",
-        "Hold on, the city never sleeps",
-        "I left my keys beside the kitchen door",
-        "a cidade não dorme",
-        "B1-B2",
-    )
-
-    assert resultado.expressoes == ["hold on"]
-    chamada = provider.chamadas[0]
-    assert chamada.modelo == "modelo-forte"
-    assert "<entrada_do_usuario>\na cidade não dorme\n</entrada_do_usuario>" in chamada.usuario
-    assert "Hold on, the city never sleeps" in chamada.sistema
-    assert "Nunca copie o verso inteiro" in chamada.sistema
-
-
-def test_linha_da_musica_limita_feedback_e_expressoes() -> None:
-    with pytest.raises(ValidationError):
-        LinhaDaMusica(compreensao="entendeu", feedback="a\nb\nc\nd\ne")
-    with pytest.raises(ValidationError):
-        LinhaDaMusica(compreensao="parcial", feedback="ok", expressoes=["a", "b", "c", "d"])
-
-
 def test_tenta_de_novo_uma_vez_quando_a_resposta_e_invalida() -> None:
     provider = FakeLLMProvider(["isto não é json", EXPLICACAO])
 
@@ -526,7 +495,6 @@ def _settings(**extra: Any) -> Settings:
         BOT_NUMBER="5531988887777",
         WAHA_API_KEY="fake-local-key",
         GCP_PROJECT_ID="meu-projeto-local",
-        EXPORT_BUCKET="meu-projeto-vocabot-exports",
         **extra,
     )
 

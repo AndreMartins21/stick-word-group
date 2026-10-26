@@ -72,9 +72,7 @@ def test_espaco_privado_nunca_tocado_nao_aparece() -> None:
 def test_espaco_privado_com_termos_e_frases() -> None:
     banco = MemoryBanco()
     repo = banco.do_espaco(PRIVADO)
-    repo.salvar_perfil(
-        Profile(nivel="B1-B2", criado_em=T0, nome="Ana", lembretes_por_dia=1, chat_id=PRIVADO)
-    )
+    repo.salvar_perfil(Profile(nivel="B1-B2", criado_em=T0, nome="Ana", chat_id=PRIVADO))
     repo.criar_entrada(_entrada("stall", proxima_revisao=T0 - timedelta(days=1)))
     repo.criar_entrada(
         _entrada("hedge", status="praticada", proxima_revisao=T0 + timedelta(days=5))
@@ -107,7 +105,6 @@ def test_espaco_privado_com_termos_e_frases() -> None:
     assert pessoa.n_termos_privado == 2
     assert pessoa.n_frases == 1  # só a do usuário
     assert pessoa.n_grupos == 0
-    assert pessoa.lembretes_por_dia_privado == 1
 
 
 def test_grupo_agrega_pessoas_por_autor_id() -> None:

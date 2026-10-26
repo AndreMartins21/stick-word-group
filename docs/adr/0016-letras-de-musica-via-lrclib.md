@@ -1,6 +1,6 @@
 # ADR-0016: Letras de música via LRCLIB, atrás de uma interface, com o risco de direito autoral aceito para uso pessoal
 
-- **Status:** Aceito
+- **Status:** Substituído por ADR-0062
 - **Data:** 2026-09-24
 
 ## Contexto

@@ -4,12 +4,21 @@ com o áudio vindo do cache depois da 1ª vez."""
 
 from __future__ import annotations
 
-from app.domain.models import Entry, Estado, SentidoSalvo
+from typing import Any
+
+from app.domain.models import Estado
 from app.services.audio import ServicoAudio
 from app.services.fake_llm import FakeTutor
 from app.services.fake_tts import FakeSintetizador
 from app.services.storage import CacheAudioEmMemoria
-from tests.helpers import CHAT, GRUPO, T0, Montagem, expansoes, explicacao_stall, montar
+from tests.helpers import CHAT, GRUPO, Montagem, expansoes, explicacao_stall
+from tests.helpers import montar as _montar
+
+
+def montar(**kwargs: Any) -> Montagem:
+    """Uma turma A2-B1, que vê a linha 🇧🇷 (ADR-0032)."""
+    return _montar(**{"nivel_padrao": "A2-B1", **kwargs})
+
 
 VOZ = "en-US-Neural2-F"
 ERRO = "🔊 I couldn't make the audio right now. Try again in a bit?"
@@ -126,21 +135,6 @@ async def test_no_grupo_o_audio_tambem_e_automatico() -> None:
 # ---- /listen: sob demanda, como sempre ---------------------------------------------------------
 
 
-async def test_listen_toca_uma_palavra_ja_salva() -> None:
-    m, sintetizador, _ = _com_audio()
-    await m.diz("stall | the talks stalled")
-    await m.diz("4")  # salva e fecha o card
-    sintetizador.chamadas.clear()
-
-    textos = await m.diz("/listen stall")
-
-    # /listen não abre a palavra: só o texto e as duas vozes, sem menu; vem do cache (M25 já
-    # sintetizou ao explicar), então nenhuma chamada nova ao TTS.
-    assert textos == ['🔊 *stall*\n"The talks stalled."']
-    assert len(m.channel.vozes_enviadas) == 4  # 2 do áudio automático + 2 do /listen
-    assert sintetizador.chamadas == []
-
-
 async def test_listen_aceita_o_numero_da_lista() -> None:
     m, _, _ = _com_audio()
     await m.diz("stall | the talks stalled")
@@ -149,49 +143,3 @@ async def test_listen_aceita_o_numero_da_lista() -> None:
     await m.diz("/listen 1")
 
     assert m.channel.vozes_enviadas[-2] == (CHAT, b"ogg:stall")
-
-
-async def test_listen_sem_palavra_explica_o_uso() -> None:
-    m, _, _ = _com_audio()
-
-    (texto,) = await m.diz("/listen")
-
-    assert texto == "Tell me which word: /listen 3 (the number from /list) or /listen stall."
-    assert m.channel.vozes_enviadas == []
-
-
-async def test_listen_de_palavra_que_nao_existe() -> None:
-    m, _, _ = _com_audio()
-
-    (texto,) = await m.diz("/listen zebra")
-
-    assert texto.startswith('I couldn\'t find "zebra"')
-
-
-async def test_sem_servico_de_audio_o_listen_avisa() -> None:
-    m = montar(tutor=FakeTutor(explicacoes=[explicacao_stall()]))
-    await m.diz("stall | the talks stalled")
-
-    (texto,) = await m.diz("/listen stall")
-
-    assert texto == ERRO
-
-
-async def test_entrada_sem_frase_do_bot_manda_so_o_termo() -> None:
-    m, _, _ = _com_audio()
-    m.repo.criar_entrada(
-        Entry(
-            slug="hang-on",
-            palavra="hang on",
-            classe="phrasal verb",
-            cefr_estimado="B1",
-            sentido=SentidoSalvo(traducao="esperar", definicao="to wait"),
-            criado_em=T0,
-            atualizado_em=T0,
-        )
-    )
-
-    textos = await m.diz("/listen hang on")
-
-    assert textos == ["🔊 *hang on*"]
-    assert m.channel.vozes_enviadas == [(CHAT, b"ogg:hang on")]

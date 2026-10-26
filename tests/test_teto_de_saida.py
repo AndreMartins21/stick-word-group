@@ -96,7 +96,6 @@ def _settings(**env: Any) -> Settings:
         BOT_NUMBER="5531988887777",
         WAHA_API_KEY="x",
         GCP_PROJECT_ID="p",
-        EXPORT_BUCKET="b",
         **env,
     )
 

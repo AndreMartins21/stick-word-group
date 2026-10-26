@@ -73,9 +73,6 @@ class EspacoLinha:
     ativado_em: datetime | None
     criado_em: datetime | None
     nivel: str | None
-    lembretes_por_dia: int | None
-    lembrete_sem_resposta: bool | None
-    proximo_lembrete: datetime | None
     estado_sessao: str
     n_termos: int
     n_termos_nova: int
@@ -103,7 +100,6 @@ class PessoaLinha:
     n_respostas_grupo: int
     n_respondeu_marcada: int
     n_grupos: int
-    lembretes_por_dia_privado: int | None
 
 
 @dataclass(frozen=True)
@@ -193,7 +189,6 @@ class _Pessoa:
     n_respostas_grupo: int = 0
     n_respondeu_marcada: int = 0
     grupos: set[str] = field(default_factory=set)
-    lembretes_por_dia_privado: int | None = None
 
 
 def _dados_do_espaco(
@@ -302,9 +297,6 @@ def montar_snapshot(banco: Banco, agora: datetime) -> Snapshot:
                 ativado_em=resumo.ativado_em,
                 criado_em=resumo.criado_em,
                 nivel=perfil.nivel if perfil else None,
-                lembretes_por_dia=perfil.lembretes_por_dia if perfil else None,
-                lembrete_sem_resposta=perfil.lembrete_sem_resposta if perfil else None,
-                proximo_lembrete=perfil.proximo_lembrete if perfil else None,
                 estado_sessao=str(sessao.estado),
                 n_termos=len(entradas),
                 n_termos_nova=sum(1 for e in entradas if e.status == "nova"),
@@ -327,7 +319,6 @@ def montar_snapshot(banco: Banco, agora: datetime) -> Snapshot:
             p.nome = perfil.nome if perfil and perfil.nome else p.nome
             p.n_termos_privado = len(entradas)
             p.n_frases += n_frases_usuario
-            p.lembretes_por_dia_privado = perfil.lembretes_por_dia if perfil else None
         else:
             for numero, membro in membros:
                 p = pessoa(numero)
@@ -360,7 +351,6 @@ def montar_snapshot(banco: Banco, agora: datetime) -> Snapshot:
             n_respostas_grupo=p.n_respostas_grupo,
             n_respondeu_marcada=p.n_respondeu_marcada,
             n_grupos=len(p.grupos),
-            lembretes_por_dia_privado=p.lembretes_por_dia_privado,
         )
         for p in sorted(pessoas.values(), key=lambda p: p.numero)
     ]

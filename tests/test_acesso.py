@@ -13,11 +13,11 @@ from app.config import Settings
 from app.flows.admin import (
     Acesso,
     Resultado,
+    _comando_privado,
     ativar_grupo,
     comando_privado,
     desativar_grupo,
     eh_admin,
-    eh_comando_de_admin,
     eh_comando_de_ativacao,
     grupo_autorizado,
     nome_da_ativacao,
@@ -42,7 +42,6 @@ def _acesso(
         BOT_NUMBER="5531988887777",
         WAHA_API_KEY="x",
         GCP_PROJECT_ID="p",
-        EXPORT_BUCKET="b",
     )
     banco, canal = MemoryBanco(), FakeChannel()
     banco.adicionar_admin(ADMIN, por=DONO, agora=T0)
@@ -53,7 +52,6 @@ def _acesso(
         grupos_fixos=fixos,
         max_grupos=max_grupos,
         agora=lambda: T0,
-        contato=settings.contact_email,
     )
     return acesso, banco, canal
 
@@ -209,12 +207,12 @@ async def test_deactivate_desliga_e_ja_ativo_avisa() -> None:
 
 
 def test_reconhece_os_comandos_de_admin_no_privado() -> None:
-    assert eh_comando_de_admin("/admin")
-    assert eh_comando_de_admin("/groups off 1")
-    assert eh_comando_de_admin("/grupos")
-    assert eh_comando_de_admin("!groups")
-    assert not eh_comando_de_admin("/list")
-    assert not eh_comando_de_admin("groups")
+    assert _comando_privado("/admin") is not None
+    assert _comando_privado("/groups off 1") is not None
+    assert _comando_privado("/grupos") is not None
+    assert _comando_privado("!groups") is not None
+    assert _comando_privado("/list") is None
+    assert _comando_privado("groups") is None
 
 
 async def test_admin_que_nao_e_o_dono_nao_usa_o_comando_admin() -> None:
@@ -392,7 +390,7 @@ async def test_teachers_rejeita_lixo_e_nao_admin_nao_usa() -> None:
     )
     assert await comando_privado(a, f"/teachers add {ALUNO}", ALUNO) is None
     assert banco.listar_professores() == []
-    assert eh_comando_de_admin("/teachers")
+    assert _comando_privado("/teachers") is not None
 
 
 # --- /ranking (admin ou dono; M58, ADR-0056) --------------------------------------------------
@@ -478,7 +476,7 @@ async def test_ranking_uso_invalido_vazio_e_nao_admin() -> None:
     assert await comando_privado(a, "/ranking", ALUNO) is None
     sem, _, _ = _acesso()
     assert await comando_privado(sem, "/ranking 3", DONO) == messages.ranking_vazio(3)
-    assert eh_comando_de_admin("/ranking")
+    assert _comando_privado("/ranking") is not None
 
 
 async def test_teachers_com_so_o_numero_alterna_e_o_singular_vale() -> None:
@@ -492,7 +490,7 @@ async def test_teachers_com_so_o_numero_alterna_e_o_singular_vale() -> None:
         == messages.PROFESSOR_ADICIONADO
     )
     assert banco.listar_professores() == [ALUNO]
-    assert eh_comando_de_admin("/teacher 5521977776666")
+    assert _comando_privado("/teacher 5521977776666") is not None
 
 
 # --- M62 (ADR-0060): `!activate <nome>` ---------------------------------------------------------

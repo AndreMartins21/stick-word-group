@@ -1,6 +1,6 @@
 # ADR-0027: Pronúncia automática do termo em cada card de revisão, só no privado
 
-- **Status:** Aceito
+- **Status:** Substituído por ADR-0062
 - **Data:** 2026-09-27
 
 ## Contexto

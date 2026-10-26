@@ -2,8 +2,8 @@
 
 `transicionar` só decide: devolve o próximo estado e a ação que os fluxos (M4/M9/M10) devem
 executar. Não chama LLM, repositório nem canal — mesmo o roteamento por IA (`Acao.ROTEAR`), a
-revisão espaçada (`Acao.RESPONDER_REVISAO`) e a prática com música (M13, `Acao.RESPONDER_VERSO`)
-são decididos aqui como "isto precisa de IA" e executados pelo `Router`.
+revisão diária (`Acao.RESPONDER_REVISAO`) e o desafio semanal (`Acao.RESPONDER_PERGUNTA`) são
+decididos aqui como "isto precisa de IA" e executados pelo `Router`.
 """
 
 from __future__ import annotations
@@ -16,11 +16,9 @@ from app.domain.choices import (
     MENU_ACOES,
     eh_pular,
     eh_sair,
-    eh_todos,
     normalizar,
     parse_escolha,
     separar_contexto,
-    so_numeros,
 )
 from app.domain.models import Estado
 
@@ -38,13 +36,6 @@ class Acao(StrEnum):
     ROTEAR = "ROTEAR"
     RESPONDER_REVISAO = "RESPONDER_REVISAO"
     ENCERRAR_REVISAO = "ENCERRAR_REVISAO"
-    BUSCAR_MUSICA = "BUSCAR_MUSICA"
-    ESCOLHER_MUSICA = "ESCOLHER_MUSICA"
-    CANCELAR_MUSICA = "CANCELAR_MUSICA"
-    RESPONDER_VERSO = "RESPONDER_VERSO"
-    ENCERRAR_MUSICA = "ENCERRAR_MUSICA"
-    SALVAR_EXPRESSOES = "SALVAR_EXPRESSOES"
-    DESCARTAR_EXPRESSOES = "DESCARTAR_EXPRESSOES"
     RESPONDER_PERGUNTA = "RESPONDER_PERGUNTA"
     EXPLICAR_PERGUNTA = "EXPLICAR_PERGUNTA"
     OUVIR_PERGUNTA = "OUVIR_PERGUNTA"
@@ -84,12 +75,6 @@ def transicionar(estado: Estado, texto: str) -> Transicao:
             return _await_action(texto)
         case Estado.REVIEWING:
             return _reviewing(texto)
-        case Estado.SONG_PICKING:
-            return _song_picking(texto)
-        case Estado.SONG_PRACTICE:
-            return _song_practice(texto)
-        case Estado.SONG_SAVING:
-            return _song_saving(texto)
         case Estado.WEEKLY_QUIZ:
             return _weekly_quiz(texto)
 
@@ -131,31 +116,3 @@ def _weekly_quiz(texto: str) -> Transicao:
     if normal in {"skip all", "skipall"} or eh_sair(texto):
         return Transicao(Estado.IDLE, Acao.ENCERRAR_SEMANAL)
     return Transicao(Estado.WEEKLY_QUIZ, Acao.RESPONDER_PERGUNTA, texto)
-
-
-def _song_picking(texto: str) -> Transicao:
-    """Escolhendo entre músicas homônimas (seção 5.8): um número escolhe (o fluxo confere se está
-    na lista), "sair" cancela e qualquer outro texto é uma nova busca."""
-    if eh_sair(texto):
-        return Transicao(Estado.IDLE, Acao.CANCELAR_MUSICA)
-    if so_numeros(texto):
-        return Transicao(Estado.SONG_PRACTICE, Acao.ESCOLHER_MUSICA, texto)
-    return Transicao(Estado.SONG_PICKING, Acao.BUSCAR_MUSICA, texto)
-
-
-def _song_practice(texto: str) -> Transicao:
-    """Como na revisão: qualquer texto que não seja "sair" é a explicação do verso atual. Sair
-    fecha com o resumo e a oferta de salvar (o fluxo decide se vai para SONG_SAVING)."""
-    if eh_sair(texto):
-        return Transicao(Estado.SONG_SAVING, Acao.ENCERRAR_MUSICA)
-    return Transicao(Estado.SONG_PRACTICE, Acao.RESPONDER_VERSO, texto)
-
-
-def _song_saving(texto: str) -> Transicao:
-    """Oferta de salvar as expressões da música: números ou "all" salvam, "sair" descarta, e
-    qualquer outro texto é o aluno seguindo em frente com uma palavra nova."""
-    if eh_sair(texto):
-        return Transicao(Estado.IDLE, Acao.DESCARTAR_EXPRESSOES)
-    if so_numeros(texto) or eh_todos(texto):
-        return Transicao(Estado.IDLE, Acao.SALVAR_EXPRESSOES, texto)
-    return Transicao(Estado.AWAIT_ACTION, Acao.EXPLICAR, texto)

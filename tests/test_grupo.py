@@ -15,7 +15,6 @@ from tests.helpers import (
     ANA,
     BIA,
     CAIO,
-    CHAT,
     DONO_NUMERO,
     GRUPO,
     Montagem,
@@ -88,14 +87,6 @@ async def test_prefixo_configuravel() -> None:
     ajuda = await m.diz_no_grupo(ANA, "#help")
 
     assert "#list" in ajuda[0] and "!list" not in ajuda[0]
-
-
-async def test_privado_nao_ve_o_grupo_e_grupo_nao_ve_o_privado() -> None:
-    m = _grupo()
-    await m.diz_no_grupo(ANA, "!add stall")
-
-    assert m.banco.do_espaco(CHAT).listar_entradas() == []
-    assert len(m.banco.do_espaco(GRUPO).listar_entradas()) == 1
 
 
 @pytest.mark.parametrize("texto", ["!", "!!!", "! add stall", "!?", "!  ", "!!! wow"])
@@ -313,7 +304,7 @@ async def test_comando_do_privado_no_grupo_e_recusado_com_a_ajuda_do_grupo(coman
 async def test_a_barra_vale_como_o_exclamacao_no_grupo() -> None:
     m = _grupo()
 
-    assert await m.diz_no_grupo(ANA, "/list") == [messages.sem_entradas("!")]
+    assert await m.diz_no_grupo(ANA, "/list") == [messages.sem_entradas()]
     assert await m.diz_no_grupo(ANA, "/export") == [messages.ajuda_do_grupo("!")]
     assert await m.diz_no_grupo(ANA, "/") == []  # barra sozinha ainda é conversa
 
@@ -337,7 +328,7 @@ async def test_a_ajuda_do_grupo_so_cita_comandos_do_grupo() -> None:
 
 async def test_list_vazio_e_com_palavras_no_titulo_da_turma() -> None:
     m = _grupo()
-    assert await m.diz_no_grupo(ANA, "!list") == [messages.sem_entradas("!")]
+    assert await m.diz_no_grupo(ANA, "!list") == [messages.sem_entradas()]
 
     await m.diz_no_grupo(ANA, "!add stall")
     await m.diz_no_grupo(ANA, "!4")
@@ -515,7 +506,7 @@ async def test_reminder_no_grupo_virou_apelido_da_daily() -> None:
 
     assert resposta == messages.lembrete_virou_daily("!")
     perfil = m.banco.do_espaco(GRUPO).obter_perfil()
-    assert perfil is not None and perfil.lembretes_por_dia == 1  # nada mudou
+    assert perfil is not None and perfil.diaria_ligada  # nada mudou
 
 
 async def test_o_grupo_nao_recebe_a_dica_de_lembretes_do_privado() -> None:
@@ -654,36 +645,6 @@ async def test_qualquer_mensagem_com_prefixo_de_qualquer_participante_conta_como
     assert respostas == [messages.ajuda_do_grupo("!")]
 
 
-async def test_o_apelido_exclamacao_no_privado_vale_a_barra() -> None:
-    m = _grupo()
-    await m.diz("stall")
-    await m.diz("4")
-
-    lista_com_barra = await m.diz("/list")
-    lista_com_exclamacao = await m.diz("!list")
-
-    assert lista_com_exclamacao == lista_com_barra
-    assert "Your words" in lista_com_exclamacao[0]  # o título do privado, não o da turma
-
-
-async def test_no_privado_exclamacao_sem_letra_continua_sendo_texto() -> None:
-    m = _grupo()
-    await m.diz("stall")
-
-    await m.diz("!!! wow")  # não é comando: vai para a IA como a frase de sempre
-
-    assert m.tutor.chamadas[-1][0] == "route"
-
-
-async def test_o_privado_segue_sem_prefixo_e_com_a_barra() -> None:
-    m = _grupo()
-
-    (card,) = await m.diz("stall")
-
-    assert "Now, you can write one or more sentences using *stall*" in card
-    assert "!1" not in card
-
-
 # --- lembretes do grupo (o agendador) ---------------------------------------------------------
 
 
@@ -743,23 +704,6 @@ async def test_grupo_desativado_nao_recebe_lembrete() -> None:
     assert m.channel.textos_enviados == []
 
 
-async def test_o_lembrete_de_um_aluno_no_privado_continua_igual() -> None:
-    from app.domain.models import Profile
-    from tests.helpers import T0
-    from tests.test_agendador import _entrada_vencida
-
-    m = _grupo()
-    m.repo.criar_entrada(_entrada_vencida())
-    m.repo.salvar_perfil(
-        Profile(nivel="B1-B2", chat_id=CHAT, lembretes_por_dia=3, proximo_lembrete=T0)
-    )
-
-    await _agendador_do_grupo(m, autorizado=False)._tick()  # o filtro é só de grupos
-
-    ((chat, texto),) = m.channel.textos_enviados
-    assert chat == CHAT and "Type 0 to leave the practice" in texto
-
-
 # --- !level (M33, ADR-0031) -------------------------------------------------------------------
 
 
@@ -782,7 +726,6 @@ async def test_level_pelo_dono_muda_o_nivel_so_da_turma() -> None:
 
     assert resposta == messages.nivel_alterado("B2-C1")
     assert m.banco.do_espaco(GRUPO).obter_perfil().nivel == "B2-C1"  # type: ignore[union-attr]
-    assert m.banco.do_espaco(CHAT).obter_perfil() is None  # o privado de ninguém mudou
 
 
 async def test_level_por_professor_da_turma_muda_o_nivel() -> None:

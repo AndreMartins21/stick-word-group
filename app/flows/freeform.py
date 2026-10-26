@@ -59,7 +59,6 @@ async def rotear(d: Deps, sessao: Sessao, perfil: Profile, texto: str) -> Sessao
                     roteamento.resposta,
                     entrada.palavra,
                     ja_viu_sinonimos=bool(sessao.sinonimos_mostrados),
-                    grupo=d.grupo_prefixo,
                 )
             )
             return sessao

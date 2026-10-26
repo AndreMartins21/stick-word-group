@@ -9,14 +9,11 @@ from app.domain.choices import (
     contem_palavra_alvo,
     eh_pular,
     eh_sair,
-    eh_todos,
     marcar_alvo,
     normalizar,
     parse_escolha,
     parse_numero,
-    parse_numeros,
     separar_contexto,
-    so_numeros,
 )
 
 
@@ -86,13 +83,6 @@ def test_eh_sair_rejeita_o_resto() -> None:
     assert eh_sair("stall") is False
 
 
-def test_so_numeros() -> None:
-    assert so_numeros("7") is True
-    assert so_numeros("1 and 3") is True
-    assert so_numeros("stall") is False
-    assert so_numeros("") is False
-
-
 def test_normalizar_tira_acento_pontuacao_e_maiuscula() -> None:
     assert normalizar("Ver Exemplos!") == "ver exemplos"
     assert normalizar("  três   ") == "tres"
@@ -152,28 +142,6 @@ def test_contem_palavra_alvo_rejeita_o_que_nao_e_a_palavra(texto: str, palavra: 
 )
 def test_marcar_alvo(frase: str, palavra: str, esperado: str | None) -> None:
     assert marcar_alvo(frase, palavra) == esperado
-
-
-@pytest.mark.parametrize(
-    ("texto", "maximo", "esperado"),
-    [
-        ("1 3", 5, [1, 3]),
-        ("1, 3 and 2", 5, [1, 3, 2]),
-        ("two", 5, [2]),
-        ("3 3", 5, [3]),
-        ("1 9", 5, None),
-        ("0", 5, None),
-        ("save them", 5, None),
-    ],
-)
-def test_parse_numeros(texto: str, maximo: int, esperado: list[int] | None) -> None:
-    assert parse_numeros(texto, maximo) == esperado
-
-
-def test_eh_todos() -> None:
-    assert eh_todos("All")
-    assert eh_todos("todas")
-    assert not eh_todos("1")
 
 
 @pytest.mark.parametrize(

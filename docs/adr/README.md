@@ -23,9 +23,9 @@ operacional: numeração, status e o índice.
 | [0011](0011-revisao-espacada-sm2-simplificado.md) | Revisão espaçada com SM-2 simplificado, independente do agendamento do Anki | Aceito | 2026-09-23 |
 | [0012](0012-agendador-no-processo-com-destino-persistido.md) | Agendador de lembretes no próprio processo, com destino persistido e trava de iniciativa | Aceito | 2026-09-23 |
 | [0013](0013-deploy-continuo-via-github-actions.md) | Deploy contínuo via GitHub Actions, autenticado por Workload Identity Federation | Aceito | 2026-09-23 |
-| [0014](0014-export-em-planilha-excel.md) | Export em planilha Excel no lugar do arquivo de importação do Anki | Aceito | 2026-09-23 |
-| [0015](0015-enviar-a-planilha-direto-pelo-whatsapp.md) | Enviar a planilha direto pelo WhatsApp, com o link do bucket só como plano B | Aceito | 2026-09-24 |
-| [0016](0016-letras-de-musica-via-lrclib.md) | Letras de música via LRCLIB, atrás de uma interface, com o risco de direito autoral aceito para uso pessoal | Aceito | 2026-09-24 |
+| [0014](0014-export-em-planilha-excel.md) | Export em planilha Excel no lugar do arquivo de importação do Anki | Substituído por ADR-0062 | 2026-09-23 |
+| [0015](0015-enviar-a-planilha-direto-pelo-whatsapp.md) | Enviar a planilha direto pelo WhatsApp, com o link do bucket só como plano B | Substituído por ADR-0062 | 2026-09-24 |
+| [0016](0016-letras-de-musica-via-lrclib.md) | Letras de música via LRCLIB, atrás de uma interface, com o risco de direito autoral aceito para uso pessoal | Substituído por ADR-0062 | 2026-09-24 |
 | [0017](0017-multiusuario-por-espaco.md) | Multiusuário por espaço | Aceito | 2026-09-24 |
 | [0018](0018-acesso-por-admins-e-ativacao-de-grupos.md) | Acesso por admins e ativação de grupos | Aceito | 2026-09-24 |
 | [0019](0019-bot-em-grupo-com-prefixo-e-comandos-limitados.md) | Bot em grupo com prefixo `!` e comandos limitados | Aceito | 2026-09-24 |
@@ -36,7 +36,7 @@ operacional: numeração, status e o índice.
 | [0024](0024-pronuncia-em-audio-com-google-cloud-tts.md) | Pronúncia em áudio sob demanda, com Google Cloud TTS e cache permanente no GCS | Aceito | 2026-09-26 |
 | [0025](0025-lembretes-ligados-por-padrao-e-fila-de-revisao-configuravel.md) | Lembretes ligados por padrão (1x às 12h, só perfil novo) e tamanho da fila de revisão configurável | Aceito | 2026-09-27 |
 | [0026](0026-pronuncia-automatica-substitui-a-opcao-de-ouvir.md) | Pronúncia automática ao explicar a palavra, substituindo a opção de ouvir no menu | Aceito | 2026-09-27 |
-| [0027](0027-pronuncia-automatica-na-revisao-so-no-privado.md) | Pronúncia automática do termo em cada card de revisão, só no privado | Aceito | 2026-09-27 |
+| [0027](0027-pronuncia-automatica-na-revisao-so-no-privado.md) | Pronúncia automática do termo em cada card de revisão, só no privado | Substituído por ADR-0062 | 2026-09-27 |
 | [0028](0028-logs-estruturados-com-eventos-e-handler-para-o-cloud-logging.md) | Logs estruturados com eventos e um handler para o Cloud Logging (não o driver `gcplogs`) | Aceito | 2026-09-27 |
 | [0029](0029-snapshot-diario-do-firestore-em-ndjson-no-gcs-lido-pelo-bigquery.md) | Snapshot diário do Firestore em NDJSON no GCS, lido pelo BigQuery como tabela externa | Aceito | 2026-09-28 |
 | [0030](0030-pedido-de-sentido-e-palavra-de-qualquer-nivel.md) | Pedido de sentido (`palavra \| sentido`) e palavra de qualquer nível | Aceito | 2026-09-28 |
@@ -71,6 +71,7 @@ operacional: numeração, status e o índice.
 | [0059](0059-group-rotula-admin-separado-de-teacher.md) | `!group` mostra o admin do bot como `admin`, não como `teacher` | Aceito | 2026-10-23 |
 | [0060](0060-ranking-em-pdf-e-nome-do-grupo-no-activate.md) | Ranking em PDF (Jinja2 + WeasyPrint) e nome do grupo no `!activate` | Aceito | 2026-10-23 |
 | [0061](0061-ranking-mostra-numero-e-nome-salvo.md) | O PDF do ranking mostra o número e o nome salvo do aluno (substitui a decisão 7 do ADR-0056) | Aceito | 2026-10-23 |
+| [0062](0062-separacao-em-stick-word-e-stick-word-group.md) | Separar o projeto em stick-word (individual) e stick-word-group (turmas) | Aceito | 2026-10-26 |
 
 ## Quando escrever um
 

@@ -28,7 +28,7 @@ from app.domain.models import (
 )
 
 PROCESSED_TTL = timedelta(days=7)
-# Espaço com lembretes ligados e ainda sem próximo horário: "vencido desde sempre", para o
+# Grupo com a diária ou o semanal ligados e ainda sem próximo horário: "vencido desde sempre", para o
 # agendador calcular o primeiro horário no próximo tick.
 SEM_HORARIO_AINDA = datetime(1970, 1, 1, tzinfo=UTC)
 _MAX_SLUGS_POR_PALAVRA = 50
@@ -241,20 +241,16 @@ def tipo_do_espaco(espaco_id: str) -> str:
 def proximo_tick(perfil: Profile, *, grupo: bool = False) -> datetime | None:
     """O que o `Banco` espelha do perfil no documento do espaço para a consulta dos lembretes:
     quando o agendador deve olhar este espaço de novo, ou `None` se ele não deve olhar nunca.
-    No grupo (M35/M36) vale o menor entre a revisão diária e o desafio semanal, não os
-    lembretes N vezes por dia."""
-    if perfil.chat_id is None:
+    Vale o menor entre a revisão diária e o desafio semanal (M35/M36); um espaço privado (de antes
+    da separação, ADR-0062) nunca é olhado."""
+    if perfil.chat_id is None or not grupo:
         return None
-    if grupo:
-        ticks = []
-        if perfil.diaria_ligada:
-            ticks.append(perfil.proxima_diaria or SEM_HORARIO_AINDA)
-        if perfil.semanal_ligada:
-            ticks.append(perfil.proxima_semanal or SEM_HORARIO_AINDA)
-        return min(ticks) if ticks else None
-    if perfil.lembretes_por_dia == 0:
-        return None
-    return perfil.proximo_lembrete or SEM_HORARIO_AINDA
+    ticks = []
+    if perfil.diaria_ligada:
+        ticks.append(perfil.proxima_diaria or SEM_HORARIO_AINDA)
+    if perfil.semanal_ligada:
+        ticks.append(perfil.proxima_semanal or SEM_HORARIO_AINDA)
+    return min(ticks) if ticks else None
 
 
 def resolver_slug(repo: Repository, palavra: str, traducao_do_sentido: str) -> str:

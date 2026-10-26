@@ -2,6 +2,13 @@
 
 Este arquivo é a especificação do projeto. Leia-o inteiro antes de escrever código. Trabalhe **marco a marco** (seção 9), pare ao fim de cada um para eu revisar e só avance quando eu aprovar.
 
+> **Separação (ADR-0062, 2026-10-26).** Este repositório é o **stick-word-group**: o bot das
+> **turmas em grupo**. O estudo individual no privado (`/song`, `/export`, lembretes do privado,
+> `/info`, `/listen`, `/profile`...) foi para o projeto irmão **stick-word**. Aqui o privado só
+> atende o dono e os admins, e só com os comandos de admin (seção 5.2); qualquer outro número é
+> ignorado no webhook por uma regra fixa, sem IA. As seções que descrevem o fluxo de uma palavra
+> (5.1, 5.4, 5.5, 6) continuam valendo: é a mesma conversa, dentro do grupo, marcando o bot.
+
 ---
 
 ## 1. O que estamos construindo
@@ -70,10 +77,9 @@ A VM tem só 1 GB de RAM. Crie um **swap de 2 GB**, limite a memória dos contai
 | `WAHA_API_KEY` | Secret Manager (gerado) | Chave que o bot usa para chamar o WAHA; o WAHA exige essa chave |
 | `WAHA_DASHBOARD_PASSWORD` | Secret Manager (gerado) | Senha do painel/Swagger do WAHA (usuário `admin`) |
 | `WAHA_HOOK_HMAC_KEY` | Secret Manager (gerado) | Chave da assinatura HMAC dos webhooks (seção 8.1); obrigatória com `APP_ENV=prod` (M52, ADR-0050) |
-| `ALLOWED_NUMBER` | `.env.infra` | Número **pessoal** do usuário, só dígitos (ex.: `5531999998888`). Desde o M14 (ADR-0017) entra na lista de números permitidos, e é o dono do bot por padrão |
-| `ALLOWED_NUMBERS` | `.env.infra` (opcional) | Lista de números permitidos separados por vírgula, mesma comparação do nono dígito (seção 8.2). Cada número é um aluno, com o próprio caderno |
+| `ALLOWED_NUMBER` | `.env.infra` | Número do **dono** do bot, só dígitos (ex.: `5531999998888`), usado quando `OWNER_NUMBER` está vazio. No privado, só o dono e os admins são atendidos (ADR-0062) |
 | `ALLOWED_GROUPS` | `.env.infra` (opcional) | Lista de ids `@g.us` de grupos autorizados (o id de um grupo novo aparece uma vez no log) |
-| `OWNER_NUMBER` | `.env.infra` (opcional) | O dono do bot; padrão o primeiro número da lista (o `ALLOWED_NUMBER`, se definido) |
+| `OWNER_NUMBER` | `.env.infra` (opcional) | O dono do bot; vazio usa o `ALLOWED_NUMBER` |
 | `MAX_GROUPS` | `.env.infra` (opcional) | Padrão `10`: teto de grupos ativados por admin (M15, ADR-0018); os de `ALLOWED_GROUPS` não contam |
 | `GROUP_PREFIX` | `.env.infra` (opcional) | Padrão `!`: em grupo o bot só lê mensagens que começam com isto (M16, ADR-0019); 1 ou 2 símbolos, sem letras, números nem a barra |
 | `LIMITE_POR_SESSAO_GRUPO` | `.env.infra` (opcional) | Padrão `5`: palavras por rodada de revisão em grupo (M17, ADR-0020); no privado é dinâmico, `MIN(palavras do aluno, 7)` (M24), a menos que `/reviewsize`/`/reminders` fixe outro valor |
@@ -85,18 +91,15 @@ A VM tem só 1 GB de RAM. Crie um **swap de 2 GB**, limite a memória dos contai
 | `ORCAMENTO_DIARIO_USD` | `.env.infra` (opcional) | Padrão `5` (M46, ADR-0044; padrão de US$ 10 para US$ 5 no ADR-0047): ao somar este custo estimado de IA no dia (fuso do aluno), o bot pausa a IA e os lembretes até o dia seguinte e avisa o dono uma vez; o dono segue atendido |
 | `MAX_FILA_POR_CHAT` / `MAX_PROCESSAMENTOS` | `.env.infra` (opcionais) | Padrão `3` / `4` (M47, ADR-0045): mensagens de um chat esperando a vez (as demais são descartadas em silêncio) e chats processando ao mesmo tempo |
 | `ORCAMENTO_MENSAL_USD` / `COTA_DIARIA_POR_GRUPO_USD` | `.env.infra` (opcionais) | Padrão `50` / `1` (M50, ADR-0048): teto mensal de IA (pausa tudo até o mês virar) e cota diária de cada grupo (pausa só o grupo que a estourou; avisa o dono) |
-| `CONTACT_EMAIL` | `.env.infra` (opcional) | E-mail que o aviso "você não tem um plano" mostra a quem não está na lista (M15) |
 | `BOT_NUMBER` | `.env.infra` | Número Vivo do bot, só dígitos (informativo/logs) |
 | `WAHA_URL` | compose | `http://waha:3000` |
 | `WAHA_SESSION` | compose | `default` |
-| `EXPORT_BUCKET` | `.env.infra` | Nome do bucket de exportações |
 | `AUDIO_BUCKET` | `.env.infra` (opcional) | Bucket do cache de áudio de pronúncia (M23). Padrão `${PROJECT_ID}-vocabot-audio`; vazio ou fora de `APP_ENV=prod`, a pronúncia fica indisponível |
 | `TTS_VOICE` | `.env.infra` (opcional) | Voz do Cloud TTS (M23). Padrão `en-US-Neural2-F` |
 | `ANTHROPIC_MODEL` | `.env.infra` (opcional) | Padrão `claude-haiku-4-5-20251001` |
 | `USER_LEVEL` | `.env.infra` | Padrão `B1-B2` |
 | `TIMEZONE` | `.env.infra` | Padrão `America/Sao_Paulo`; fuso para distribuir os lembretes (M10, seção 5.7) |
 | `APP_ENV` | compose | `local` ou `prod` |
-| `LYRICS_URL` | `.env.infra` (opcional) | Padrão `https://lrclib.net`; API pública de letras do `/song` (M13, ADR-0016), sem chave |
 
 Para desenvolvimento local, use um `.env` (no `.gitignore`) com valores falsos. Os testes nunca dependem de credenciais reais. Para o simulador com IA real (`--real-llm`), use as credenciais locais do Google (`gcloud auth application-default login`), sem chave em arquivo.
 
@@ -178,45 +181,24 @@ Regras:
   respostas do roteamento livre (`pedido`, `fora_do_escopo`, avaliação de `frase`), exceto quando a
   resposta já é o card de uma palavra nova (`nova_palavra`).
 
-### 5.2 Comandos
+### 5.2 Comandos no privado (só admins, ADR-0062)
 
-`/help`, `/list [página]`, `/info N|palavra`, `/pending`, `/practice [N|palavra]`, `/review`,
-`/reviewsize [N|auto]`, `/listen N|palavra`, `/song nome [- artista]`,
-`/reminders [N [INICIOh-FIMh] [TAMANHO] | off]`, `/profile`, `/export`, `/delete N|palavra`,
-`/level A1-A2|A2-B1|B1-B2|B2-C1|C1-C2|C2`, `/cancel`, `/status`. Todos os nomes são em inglês (M12, ADR-0014). Os
-apelidos em PT-BR que a spec sempre teve (`/ajuda`, `/lista`, `/pendentes`, `/praticar`,
-`/exportar [tudo]`, `/apagar`, `/nivel`, `/cancelar`, `/reminders`, `/review`, `/perfil`, `/musica`)
-**continuam funcionando, mas nenhuma mensagem do bot os divulga**.
+O privado não é mais um espaço de estudo. O webhook (`app/main.py`) só deixa passar o **dono**
+(`OWNER_NUMBER` ou, legado, `ALLOWED_NUMBER`) e os **admins** (`admins/` no Firestore): qualquer
+outro número é ignorado em silêncio — sem resposta, sem `sendSeen`, sem gravar nada (nem a
+deduplicação) e sem chamar a IA. Para o dono e os admins:
 
-- `/list` mostra as palavras **das mais novas para as mais antigas**, 20 por página: as mais
-  novas ficam sempre na página 1, e `/list 2` é a página 2. Uma página inexistente responde com um
-  aviso. Cada linha é `N. termo: tradução em PT-BR`, sem emoji de status (use `/pending` para ver as
-  ainda não praticadas). O número de cada palavra é **fixo** (1 = a mais antiga, na ordem de criação), então
-  `/info 7` e `/delete 7` continuam apontando para a mesma palavra quando entram palavras novas.
-- `/info N` (número da `/list`) ou `/info palavra` mostra tudo de uma entrada: tradução, definição,
-  outros sentidos, nota, status e próxima revisão, as frases do aluno **já corrigidas** (a
-  `versao_natural`, sem `[[ ]]`, até 5, sem repetir), até 3 exemplos do bot e os sinônimos salvos.
-  `/practice` e `/delete` também aceitam o número.
-- `/pending` lista as entradas com status `nova`.
-- `/export` gera a planilha com **todas** as palavras (ver 7.3); `/export all` (e `/exportar tudo`)
-  é aceito e faz o mesmo. Sem nenhuma palavra, o bot avisa que não há o que exportar.
-- `/practice` sem argumento pega a pendente mais antiga.
-- `/level` aceita A1-A2, A2-B1, B1-B2, B2-C1, C1-C2 e C2 (M34, ADR-0032).
-- `/reminders`, `/review` e `/reviewsize`: ver seção 5.7.
-- `/song`: ver seção 5.8. Sem argumento, mostra como usar.
-- `/profile` mostra o nível, o total de palavras (praticadas e pendentes), quantas estão vencidas
-  para revisão e os lembretes (`every day, 3x between 9h and 21h` ou `off`) e, com os lembretes ligados, **quando o
-  próximo toca** (`Next reminder: today at 14:00`, `tomorrow at 08:00` ou `Mon 28 Sep at 08:00`, no
-  fuso do aluno). `/reminders` (consulta e ao ligar/mudar) mostra o mesmo horário. O horário vem de
-  `profile/me.proximo_lembrete` se ainda está no futuro; senão é calculado da janela
-  (`app/domain/lembretes.py:proximo_a_exibir`). Os lembretes rodam todos os dias; não há escolha de
-  dias da semana.
-- `/status` mostra o status da sessão do WAHA, o total de palavras e as pendentes.
-- **Comandos de acesso (M15, ADR-0018), escondidos do `/help`:** `/groups` (dono e admins) lista os grupos
-  ativos e os pendentes, com o nome e as horas que faltam para o bot sair, e `/groups off N` desativa o
-  grupo N da lista; `/admin`, `/admin add NUMERO` e `/admin remove NUMERO` (só o dono) gerenciam os
-  admins; `/teachers`, `/teachers NUMERO` (alterna, M59), `/teachers add NUMERO` e `/teachers remove NUMERO` (admins e dono, M57, ADR-0055; `/teacher` vale também)
-  gerenciam os professores globais; `/ranking [meses]` (admins e dono, M58, ADR-0056; PDF desde o M62, ADR-0060) envia um PDF (com o número e o nome salvo de cada aluno, M63, ADR-0061) com o top 20 de alunos, o top 10 de turmas (por interações por aluno matriculado) e o top 3 de cada turma, contando só respostas da revisão diária e do desafio semanal, padrão 6 meses (1 a 24), com staff fora. Para quem não pode usá-los, valem como qualquer comando desconhecido.
+- `/groups` (dono e admins) lista os grupos ativos e os pendentes, com o nome e as horas que faltam
+  para o bot sair, e `/groups off N` desativa o grupo N da lista.
+- `/admin`, `/admin add NUMERO` e `/admin remove NUMERO` (só o dono) gerenciam os admins.
+- `/teachers`, `/teachers NUMERO` (alterna, M59), `/teachers add NUMERO` e `/teachers remove NUMERO`
+  (admins e dono, M57, ADR-0055; `/teacher` vale também) gerenciam os professores globais.
+- `/ranking [meses]` (admins e dono, M58, ADR-0056; PDF desde o M62, ADR-0060) envia um PDF (com o
+  número e o nome salvo de cada aluno, M63, ADR-0061) com o top 20 de alunos, o top 10 de turmas (por
+  interações por aluno matriculado) e o top 3 de cada turma, contando só respostas da revisão diária
+  e do desafio semanal, padrão 6 meses (1 a 24), com staff fora.
+- Qualquer outro texto (ou mídia) do dono ou de um admin recebe a lista fixa desses comandos
+  (`messages.ajuda_do_admin`), sem IA. `!` vale como a barra (`!groups`).
 
 ### 5.2b Grupos de turma (M16, ADR-0019)
 
@@ -413,164 +395,32 @@ Send me another word or expression whenever you want.
 - Marque as mensagens recebidas como lidas (`sendSeen`).
 - Mostre "digitando…" (`startTyping`) enquanto chama a IA e pare antes de enviar.
 - Espere de 1 a 2 s (aleatório) antes de cada envio.
-- **Nunca** envie mensagem para um número fora da allowlist (`ALLOWED_NUMBER`/`ALLOWED_NUMBERS`, seção 8.2): só ao chat de quem escreveu.
+- **Nunca** envie mensagem a um número no privado que não seja o dono ou um admin (ADR-0062): no grupo, só ao próprio grupo.
 - Nunca mande mais de 3 mensagens seguidas sem uma resposta do usuário (o limite vale por espaço, M14).
 - **Limite de uso (M43, ADR-0041):** por pessoa 6/min e 150/dia, por grupo 400/dia, 600 s de áudio/dia por pessoa, em memória (janela deslizante). A primeira recusa avisa uma vez, o resto fica em silêncio; conversa entre pessoas no grupo não conta; o dono não é limitado.
 - **Fila (M47, ADR-0045):** no máximo 3 mensagens por chat esperando a vez (as demais são descartadas em silêncio, evento `fila_cheia`) e 4 chats processando ao mesmo tempo.
 - **Teto mensal e cota por grupo (M50, ADR-0048):** o gasto de IA de cada chamada é atribuído ao espaço que a causou (`custo.no_espaco`); a cota diária de um grupo pausa só ele até amanhã (um aviso ao grupo, uma DM ao dono, revisões e desafios do grupo não disparam); o teto mensal pausa a IA de todos até o mês virar (a soma dos dias do mês vem de `uso/{dia}`).
 - **Orçamento diário de IA (M46, ADR-0044):** esgotado o `ORCAMENTO_DIARIO_USD`, nenhuma mensagem chega à IA (um aviso por chat por dia), o agendador não dispara lembretes e o dono recebe uma DM; o dono continua atendido.
 - **Texto acima de `MAX_CARACTERES` (500) é recusado** (M40, ADR-0038) com um aviso curto, antes do banco e da IA; no grupo só vale para o que o bot lê (marcação, citação, comando).
-- **A IA nunca é chamada para quem não tem plano** (M15): número fora da lista só recebe o aviso "você
-  não tem um plano" (texto em inglês com a linha 🇧🇷, e o e-mail de `CONTACT_EMAIL`), no máximo uma
-  vez a cada 7 dias por número, e depois silêncio, sem `sendSeen`, sem ler nem gravar nada.
+- **A IA nunca é chamada no privado de quem não é admin** (ADR-0062): silêncio total, sem `sendSeen`,
+  sem ler nem gravar nada.
 - **Grupos só entram por um admin** (M15): o bot ativado num grupo por `!activate` de um admin (dono ou
   `admins/`), até `MAX_GROUPS`. Grupo em que foi adicionado sem ativação fica pendente em silêncio e o
   bot **sai dele depois de 24 h**, sem mandar mensagem. Configure no celular do bot: Privacidade →
   Grupos → "Meus contatos".
 
-### 5.7 Revisão espaçada e lembretes (M10, ADR-0011, ADR-0012, ADR-0025)
+### 5.7 Revisão espaçada (M10, ADR-0011, ADR-0012)
 
-O bot também **inicia** conversas: no horário combinado, faz uma sessão de revisão com as palavras
-vencidas. Espaçamento estilo Anki (SM-2 simplificado, `app/domain/srs.py`), mas a nota vem do
-julgamento da IA sobre a resposta em texto livre do aluno, não de 4 botões.
+O agendamento das palavras segue o SM-2 simplificado de `app/domain/srs.py` (a nota vem do
+julgamento da IA sobre a resposta em texto livre). No grupo, quem inicia as rodadas é a **revisão
+diária** e o **desafio semanal** (seção 5.2b); o tamanho da rodada é `LIMITE_POR_SESSAO_GRUPO` (5)
+ou o fixado em `!daily ... size N`. Os lembretes N vezes por dia do privado (`/reminders`,
+`/reviewsize`) saíram deste projeto (ADR-0062). O agendador (`app/services/lembretes.py`) roda no
+próprio processo, um tick por minuto, só para espaços `@g.us`.
 
-**Configuração:** `/reminders` mostra o estado; `/reminders N` liga N vezes por dia na janela
-padrão (9h–21h); `/reminders N INICIOh-FIMh` usa uma janela própria (N de 1 a 8, `0 <= início <
-fim <= 23`); `/reminders off` desliga. `/reminders` aceita um último parâmetro opcional, o tamanho
-da fila de revisão (ver abaixo) — **omitido, não mexe no que já estava configurado** (nunca reseta
-um `/reviewsize` anterior sem a pessoa pedir). **Ligado por padrão (M24, ADR-0025): 1x por dia,
-às 12h** — só para perfil novo; quem já tinha conta antes do M24 não muda sozinho. Quando os
-lembretes estão desligados, a primeira palavra salva mostra uma dica de uma linha sobre o comando,
-uma única vez. Os horários se distribuem igualmente dentro da janela
-(`app/domain/lembretes.py:horarios_do_dia`).
+### 5.8 Prática com letra de música (removida, ADR-0062)
 
-**Tamanho da fila (M24):** por padrão, dinâmico — `MIN(palavras do aluno, 7)`. `/reviewsize N` fixa
-um valor (1 a 20); `/reviewsize auto` volta ao dinâmico; `/reviewsize` sozinho mostra o atual. O
-último parâmetro de `/reminders`, **quando dado**, faz a mesma coisa, para configurar tudo de uma
-vez; omitido, o `/reminders` mexe só nos lembretes, sem tocar no tamanho da fila. Um valor fixo
-vale tanto no privado quanto no grupo (que por padrão usa `LIMITE_POR_SESSAO_GRUPO`, 5). `/profile`
-mostra o tamanho efetivo da sessão.
-
-**Máquina de estados:** um novo estado, `REVIEWING`. Durante ele, qualquer texto que não seja
-"sair" (`0`, `stop`, `quit`, `exit`, `leave`) é a resposta à palavra atual — sem roteamento por IA
-aqui (seria ambiguidade e custo à toa). Comandos (`/`) continuam funcionando; `/cancelar` fecha a
-sessão com o resumo, como `0` faria.
-
-**Pronúncia automática do termo (M26, ADR-0027, seção 7.4):** no privado, cada card vem seguido da
-voz do termo (sem a frase — é sobre lembrar o som, não reouvir o exemplo). No grupo não: o
-orçamento de 3 mensagens seguidas já é disputado pelo repasse e pelo fechamento da rodada
-(ADR-0020), e áudio ali arriscaria derrubar um dos dois em silêncio.
-
-```
-⏰ *Practice time* — 12 words to review.
-
-🔁 1/12 · *stall*
-Explain it in English in your own words, or write a sentence using it.
-
-_Type 0 to leave the practice._
-```
-Cada turno seguinte é **uma mensagem só**, com o feedback da resposta anterior e o próximo card
-juntos (respeita o limite de 3 mensagens seguidas, seção 5.6):
-```
-✅ That's it — you clearly remember this one.
-💬 "to stop making progress" is exactly the idea.
-
-🔁 2/12 · *deadline*
-Explain it in English in your own words, or write a sentence using it.
-
-_Type 0 to leave the practice._
-```
-Ao acabar a fila, digitar `0` ou `/cancelar`:
-```
-🎉 *Practice done* — 9 of 12 reviewed.
-✅ Solid: stall, deadline, overwhelmed
-🔁 Coming back soon: reluctant, mitigate
-Send me a new word or expression whenever you want.
-```
-
-**Fila de uma sessão** (`app/flows/review.py:montar_fila`): as vencidas primeiro (mais antiga
-primeiro; `proxima_revisao=None` = cartão novo, vencido desde já), completando até o tamanho da
-fila (`app/flows/review.py:limite`, M24: ver seção 5.7 acima) com as que vencem mais cedo entre as
-que ainda não venceram. Sem nada vencido, o agendador fica em silêncio —
-nunca manda "nada para revisar" sem o aluno pedir (só `/review`, chamado explicitamente, avisa).
-Uma resposta `de_novo` volta a palavra para o **fim da fila desta sessão** (como no Anki) e conta
-um lapso; as demais notas (`dificil`/`bom`/`facil`) avançam o agendamento.
-
-**Disparo, com três camadas de segurança** (seção 5.6, ADR-0012): um agendador em segundo plano
-(`app/services/lembretes.py:Agendador`), acordando a cada minuto. Desde o M14 (ADR-0017) ele olha todos os espaços com lembretes ligados (uma consulta por tick, só os vencidos) e cada espaço tem o próprio `chat_id`, `proximo_lembrete` e `lembrete_sem_resposta`; as três camadas valem por espaço. Só dispara com um `chat_id` real
-— o número que o WhatsApp de fato usa para esse aluno, aprendido de uma mensagem recebida (nunca o
-`ALLOWED_NUMBER` do `.env` direto: pode diferir no nono dígito, seção 8.2). Nunca dois lembretes
-seguidos sem resposta ao anterior (`lembrete_sem_resposta`, limpo na próxima mensagem do aluno,
-qualquer que seja). Se a conversa está aberta (`sessao.estado != IDLE`), adia para o próximo tick,
-e desiste (recalculando o próximo horário) se o atraso passar de 2 horas.
-
-`/review` começa a sessão na hora, sem esperar o próximo horário.
-
-### 5.8 Prática com letra de música (M13, ADR-0016)
-
-`/song nome` (ou `/song nome - artista`) pratica a compreensão de uma música, verso a verso. A
-letra vem do LRCLIB (`app/services/letras.py`, atrás da interface `LyricsProvider`); as regras
-sobre a letra são funções puras em `app/domain/musica.py`, e o fluxo em `app/flows/song.py`.
-
-```
-IDLE / qualquer ── /song nome ──▶ buscar ──▶ 0 músicas: avisa  ──▶ IDLE
-                                          ──▶ 1 música: começa ──▶ SONG_PRACTICE
-                                          ──▶ 2 a 5: lista     ──▶ SONG_PICKING
-SONG_PICKING  ── número da lista   ──▶ começa           ──▶ SONG_PRACTICE
-              ── 0 / stop / quit   ──▶ cancela          ──▶ IDLE
-              ── outro texto       ──▶ nova busca       ──▶ (como /song)
-SONG_PRACTICE ── 0 / stop / quit   ──▶ resumo           ──▶ SONG_SAVING (ou IDLE sem expressões)
-              ── qualquer texto    ──▶ feedback + próximo verso ──▶ SONG_PRACTICE
-                                       (no último verso: feedback + resumo ──▶ SONG_SAVING ou IDLE)
-SONG_SAVING   ── números / all     ──▶ salva as escolhidas ──▶ IDLE
-              ── 0 / stop / quit   ──▶ descarta            ──▶ IDLE
-              ── outro texto       ──▶ é uma palavra nova  ──▶ explicar ──▶ AWAIT_ACTION
-```
-
-**Busca.** Com `- artista` (hífen, meia-risca ou travessão; "by" não separa, porque aparece em
-títulos), busca por `track_name` + `artist_name`; se nada vier, repete a busca livre com o texto
-inteiro. Sem artista, busca por `track_name` e, se nada vier, pela busca livre `q`. Dos resultados,
-ficam só as músicas **com letra** (instrumentais saem), **em inglês** e **uma por artista** (a
-fonte repete a mesma música em coletâneas, com o título sujo), com o título exato na frente, até
-5. Uma candidata só: começa direto. Duas ou mais: lista numerada `N. *Título* — Artista`, com a
-dica de mandar o nome com o artista se a certa não estiver lá. Número fora da lista repete a lista.
-
-**Idioma** (`eh_ingles`): heurística sem IA — a proporção de palavras muito comuns do inglês (sem
-as ambíguas com o português/espanhol, como "a", "no", "me") precisa ser de pelo menos 20%. Letras
-em inglês ficam entre ~33% e ~65%; em português, espanhol, alemão ou coreano, abaixo de 5%. Se a
-busca só achou versões em outro idioma, o bot explica que não dá para praticar inglês com uma
-letra em outra língua e pede outra música.
-
-**Versos** (`extrair_versos`): as linhas com conteúdo, na ordem, sem marcações (`[Chorus]`,
-`(x2)`), sem as de uma palavra só ou só de interjeições (`oh oh`, `yeah yeah`) e **sem repetição**
-(o refrão aparece uma vez). No máximo 40 versos por música.
-
-**Turno** (como a revisão, seção 5.7): qualquer texto em `SONG_PRACTICE` é a explicação do verso
-atual, em inglês ou português — sem roteamento por IA. Uma chamada de `Tutor.song_line` julga o
-sentido (não a gramática) e aponta até 3 palavras/expressões do verso que o aluno não pegou; o
-fluxo descarta as que não estão de fato no verso. A resposta é **uma mensagem só**: feedback e o
-próximo verso, que sempre termina com `Type 0 to leave the practice.`:
-
-```
-🤔 Close! "Hold on" here means "wait / don't give up", not "hold something".
-💬 The city is always awake and busy.
-
-🎵 Line 4/6
-_I wrote your name on a paper plane_
-What does it mean? Explain in English or Portuguese.
-_Type 0 to leave the practice._
-```
-
-**Fim** (último verso, `0` ou `/cancel`): o resumo diz quantos versos foram feitos e lista até 10
-expressões acumuladas (sem repetir), oferecendo salvá-las: `1 3`, `1 and 3`, `all` ou `0`. Cada
-escolhida é explicada por `Tutor.explain` com o verso como contexto (`expressão | verso`, o mesmo
-formato da captura) e gravada como uma entrada `nova` com o exemplo do bot — todas as explicações
-vêm antes de gravar qualquer uma, então uma falha da IA não deixa nada pela metade e a sessão
-continua em `SONG_SAVING`. Sem expressões, o resumo não oferece nada e a sessão volta a IDLE.
-
-**Direito autoral** (ADR-0016): as letras do LRCLIB não são licenciadas; o risco está aceito
-enquanto o bot for de uso pessoal. Testes, fixtures, evals e o simulador usam **só letras
-inventadas**; o prompt proíbe a IA de repetir o verso inteiro no feedback.
+O `/song` era do privado e foi para o projeto **stick-word**.
 
 ## 6. Contratos com a IA
 
@@ -727,26 +577,9 @@ meta/snapshot               { ultimo_dia }              # M28: último dia (AAAA
 - Uma entrada fica `praticada` quando tem ao menos uma frase do usuário avaliada; senão, é `nova`.
 - A frase do cartão é a melhor frase **do usuário** (`correta`, senão a `versao_natural` mais recente). Se não houver, use o primeiro exemplo do bot.
 
-### 7.3 Export em planilha Excel (M12, ADR-0014)
-`/export` gera um `.xlsx` (openpyxl) com **todas** as palavras, em três abas. Cabeçalho em negrito e
-congelado; datas em UTC, sem fuso (o Excel não guarda fuso).
-- **Words** (uma linha por entrada): `#`, `Word`, `Class`, `CEFR`, `Translation`, `Definition`,
-  `Other senses`, `Note`, `Tags`, `Status`, `Source text`, `Best sentence`, `Created`, `Last review`,
-  `Next review`, `Repetitions`, `Lapses`, `Ease`. `Best sentence` segue a regra da seção 7.2, sem `[[ ]]`.
-- **Sentences** (uma linha por frase, do aluno e do bot): `#`, `Word`, `Author` (`you`|`bot`),
-  `Sentence`, `Corrected version`, `Verdict`, `Corrections`, `Explanation`, `Date`.
-- **Synonyms**: `#`, `Word`, `Synonym`, `Meaning`, `Example`.
+### 7.3 Export em planilha Excel (removido, ADR-0062)
 
-O campo `exportado` das entradas deixou de ser usado (a planilha é sempre um retrato completo).
-
-**Entrega (ADR-0015):** o bot envia o `.xlsx` direto no chat, como documento, com uma legenda curta
-(`Channel.send_file`, `POST /api/sendFile` com o arquivo em base64). Sem texto separado e sem link.
-**Plano B:** se o envio falhar, o bot sobe o mesmo arquivo no bucket e manda o link. O upload em `gs://$EXPORT_BUCKET/exports/vocabot_AAAA-MM-DD_HHMM.xlsx` (hora em UTC), com
-content-type `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, e **URL assinada V4
-válida por 24 h**. Na VM não há chave privada, então assine via IAM `signBlob`: a conta de serviço da
-VM precisa do papel `roles/iam.serviceAccountTokenCreator` **sobre ela mesma**, e use
-`service_account_email` + `access_token` no `generate_signed_url`. O bucket tem uma regra de ciclo de
-vida que apaga objetos após 7 dias.
+O `/export` era do privado e foi para o projeto **stick-word**; não há bucket de export aqui.
 
 ### 7.4 Pronúncia em áudio (M23/M25/M26, ADR-0024, ADR-0026, ADR-0027)
 
@@ -970,7 +803,7 @@ Action é visível a qualquer pessoa — nada sensível pode aparecer em log.
 - **`infra/setup_cicd.sh`** (idempotente, mesmo padrão de `setup.sh`): cria o Workload Identity
   Pool (`github-pool`) e o provider OIDC (`github-provider`, emissor
   `token.actions.githubusercontent.com`, *attribute condition* travada em
-  `assertion.repository == 'AndreMartins21/anki-whatsapp' && assertion.ref == 'refs/heads/main'`);
+  `assertion.repository == 'AndreMartins21/stick-word-group' && assertion.ref == 'refs/heads/main'`);
   cria a conta de serviço `vocabot-deploy` e concede `roles/compute.osAdminLogin` **só na instância
   da VM**, mais `roles/iap.tunnelResourceAccessor` e `roles/compute.viewer` **no projeto** (nenhum
   dos dois funciona só na instância — `gcloud` rejeita o primeiro e o segundo falha o deploy real

@@ -9,6 +9,5 @@
   {"name": "n_frases", "type": "INTEGER", "mode": "REQUIRED"},
   {"name": "n_respostas_grupo", "type": "INTEGER", "mode": "REQUIRED"},
   {"name": "n_respondeu_marcada", "type": "INTEGER", "mode": "REQUIRED"},
-  {"name": "n_grupos", "type": "INTEGER", "mode": "REQUIRED"},
-  {"name": "lembretes_por_dia_privado", "type": "INTEGER", "mode": "NULLABLE"}
+  {"name": "n_grupos", "type": "INTEGER", "mode": "REQUIRED"}
 ]

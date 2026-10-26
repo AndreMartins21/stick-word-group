@@ -1,6 +1,6 @@
 # ADR-0014: Export em planilha Excel no lugar do arquivo de importação do Anki
 
-- **Status:** Aceito
+- **Status:** Substituído por ADR-0062
 - **Data:** 2026-09-23
 
 ## Contexto

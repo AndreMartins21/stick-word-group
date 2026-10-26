@@ -1,7 +1,7 @@
 [project]
-name = "vocabot"
+name = "stick-word-group"
 version = "0.1.0"
-description = "Bot de WhatsApp para praticar vocabulário de inglês, com export para Excel"
+description = "Bot de WhatsApp para turmas de inglês: vocabulário em grupo, revisão diária e desafio semanal"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = { text = "Proprietary" }
@@ -19,7 +19,6 @@ dependencies = [
     # `python:3.12-slim` (Dockerfile) não traz o banco de fusos do sistema; sem isto,
     # ZoneInfo("America/Sao_Paulo") (M10, lembretes) estoura na imagem, mesmo passando local.
     "tzdata>=2025.2",
-    "openpyxl>=3.1.5",
     "google-cloud-texttospeech>=2.37.0",
     "google-cloud-logging>=3.16.3",
     "jinja2>=3.1.6",
@@ -36,7 +35,6 @@ dev = [
     "pre-commit>=4.0",
     "types-pyyaml>=6.0",
     "pyyaml>=6.0.3",
-    "types-openpyxl>=3.1.5.20260827",
     "pypdf>=6.21.2",
 ]
 # Extras usados só pelos evals contra a API real (fora do pytest).

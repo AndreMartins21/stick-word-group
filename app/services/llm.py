@@ -1,6 +1,6 @@
 """IA (seção 6 da spec): `LLMProvider` (Gemini no Vertex AI ou Anthropic) e `Tutor`, as funções
 de negócio — `explain`, `evaluate`, `examples`, `expansions`, `synonyms`, `route`, `review`,
-`song_line` — que não sabem
+`weekly_questions`, `weekly_answer` — que não sabem
 qual provedor está por baixo (ADR-0005).
 """
 
@@ -27,7 +27,6 @@ from app.domain.models import (
     Expansion,
     Expansoes,
     Explanation,
-    LinhaDaMusica,
     NivelUsuario,
     PerguntaSemanal,
     PerguntasSemanais,
@@ -132,16 +131,6 @@ class Tutor(Protocol):
         resposta: str,
         nivel: NivelUsuario,
     ) -> Revisao: ...
-
-    def song_line(
-        self,
-        titulo: str,
-        artista: str,
-        verso: str,
-        verso_anterior: str | None,
-        resposta: str,
-        nivel: NivelUsuario,
-    ) -> LinhaDaMusica: ...
 
     def weekly_questions(
         self, vocabulario: Sequence[tuple[str, str]], nivel: NivelUsuario, n: int
@@ -275,7 +264,6 @@ _METODO_POR_SCHEMA: dict[type[BaseModel], str] = {
     Sinonimos: "synonyms",
     Roteamento: "route",
     Revisao: "review",
-    LinhaDaMusica: "song_line",
     PerguntasSemanais: "weekly_questions",
     AvaliacaoDaPergunta: "weekly_answer",
 }
@@ -493,23 +481,6 @@ class LLMTutor:
             self._provider,
             prompts.prompt_review(nivel, palavra, sentido, resposta),
             Revisao,
-            modelo=self._modelo_avaliacao,
-            temperatura=TEMPERATURA_PRECISA,
-        )
-
-    def song_line(
-        self,
-        titulo: str,
-        artista: str,
-        verso: str,
-        verso_anterior: str | None,
-        resposta: str,
-        nivel: NivelUsuario,
-    ) -> LinhaDaMusica:
-        return _gerar_validado(
-            self._provider,
-            prompts.prompt_song_line(nivel, titulo, artista, verso, verso_anterior, resposta),
-            LinhaDaMusica,
             modelo=self._modelo_avaliacao,
             temperatura=TEMPERATURA_PRECISA,
         )

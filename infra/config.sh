@@ -32,7 +32,6 @@ ZONE="us-central1-a"
 VM_NAME="vocabot-vm"
 SA_NAME="vocabot-vm"
 SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
-EXPORT_BUCKET="${EXPORT_BUCKET:-${PROJECT_ID}-vocabot-exports}"
 AUDIO_BUCKET="${AUDIO_BUCKET:-${PROJECT_ID}-vocabot-audio}"
 TTS_VOICE="${TTS_VOICE:-en-US-Neural2-F}"
 LLM_PROVIDER="${LLM_PROVIDER:-vertex_gemini}"
@@ -49,7 +48,7 @@ SEGREDOS_GERADOS=(WAHA_API_KEY WAHA_DASHBOARD_PASSWORD WAHA_HOOK_HMAC_KEY)
 SSH_FLAGS=(--zone "$ZONE" --project "$PROJECT_ID" --tunnel-through-iap)
 
 # CI/CD (infra/setup_cicd.sh, seção 10.9 da spec / ADR-0013).
-GITHUB_REPO="AndreMartins21/anki-whatsapp"
+GITHUB_REPO="AndreMartins21/stick-word-group"
 WIF_POOL="github-pool"
 WIF_PROVIDER="github-provider"
 DEPLOY_SA_NAME="vocabot-deploy"

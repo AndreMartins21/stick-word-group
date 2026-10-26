@@ -54,12 +54,10 @@ def criar_ambiente(
     settings = Settings(
         _env_file=None,
         ALLOWED_NUMBER=DONO,
-        ALLOWED_NUMBERS=ALUNO_COMUM,
         ALLOWED_GROUPS=GRUPO_FIXO,
         BOT_NUMBER="5531988887777",
         WAHA_API_KEY="fake-local-key",
         GCP_PROJECT_ID="meu-projeto-local",
-        EXPORT_BUCKET="meu-projeto-vocabot-exports",
     )
     banco = MemoryBanco()
     banco.adicionar_admin(ADMIN, por=DONO, agora=T0)

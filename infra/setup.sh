@@ -48,24 +48,7 @@ for papel in roles/datastore.user roles/logging.logWriter roles/aiplatform.user;
   run gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:$SA_EMAIL" --role="$papel" --condition=None --quiet --format=none
 done
-# TokenCreator sobre ELA MESMA: é o que permite assinar URLs via IAM signBlob sem chave privada.
-run gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
-  --member="serviceAccount:$SA_EMAIL" --role=roles/iam.serviceAccountTokenCreator \
-  --project "$PROJECT_ID" --format=none
-
-echo "==> 4. Bucket gs://$EXPORT_BUCKET (privado, ciclo de vida de 7 dias)"
-if ! existe gcloud storage buckets describe "gs://$EXPORT_BUCKET" --project "$PROJECT_ID"; then
-  run gcloud storage buckets create "gs://$EXPORT_BUCKET" --location="$REGION" \
-    --uniform-bucket-level-access --public-access-prevention --project "$PROJECT_ID"
-fi
-run gcloud storage buckets update "gs://$EXPORT_BUCKET" \
-  --lifecycle-file="$INFRA_DIR/lifecycle.json" --project "$PROJECT_ID"
-# objectAdmin só neste bucket, não no projeto.
-run gcloud storage buckets add-iam-policy-binding "gs://$EXPORT_BUCKET" \
-  --member="serviceAccount:$SA_EMAIL" --role=roles/storage.objectAdmin \
-  --project "$PROJECT_ID" --format=none
-
-echo "==> 4b. Bucket gs://$AUDIO_BUCKET (privado, permanente: cache dos áudios de pronúncia)"
+echo "==> 4. Bucket gs://$AUDIO_BUCKET (privado, permanente: cache dos áudios de pronúncia)"
 # Sem lifecycle: o áudio é regenerável, mas gerar de novo custa cota do TTS (ADR-0024).
 if ! existe gcloud storage buckets describe "gs://$AUDIO_BUCKET" --project "$PROJECT_ID"; then
   run gcloud storage buckets create "gs://$AUDIO_BUCKET" --location="$REGION" \
@@ -142,7 +125,6 @@ echo
 echo "Pronto. Para conferir o estado (só leitura):"
 echo "  gcloud compute instances list --project $PROJECT_ID"
 echo "  gcloud secrets list --project $PROJECT_ID"
-echo "  gcloud storage buckets describe gs://$EXPORT_BUCKET --project $PROJECT_ID"
 echo "  gcloud storage buckets describe gs://$AUDIO_BUCKET --project $PROJECT_ID"
 echo "Próximo passo: bash infra/deploy.sh   (e depois bash infra/pair.sh)"
 echo "Antes do primeiro deploy, crie um alerta de orçamento em Billing → Budgets."

@@ -18,7 +18,6 @@ from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from functools import lru_cache
-from pathlib import Path
 from typing import Annotated
 from zoneinfo import ZoneInfo
 
@@ -38,7 +37,6 @@ from app.channel.parser import (
     digitos_do_chat_id,
     eh_lid,
     numero_e_permitido,
-    numero_esta_na_lista,
     parse_evento,
 )
 from app.channel.waha import WahaChannel
@@ -55,18 +53,11 @@ from app.repo.memory import MemoryBanco
 from app.services import custo
 from app.services.audio import ServicoAudio
 from app.services.lembretes import Agendador
-from app.services.letras import LrclibProvider
 from app.services.llm import criar_tutor
 from app.services.log_handler import criar_handler_da_nuvem
 from app.services.metricas_destino import DestinoDeMetricas, criar_destino_gcs
 from app.services.orcamento import Orcamento
-from app.services.planilha import ExportadorExcel
-from app.services.storage import (
-    Armazenamento,
-    ArmazenamentoLocal,
-    criar_armazenamento_gcs,
-    criar_cache_audio_gcs,
-)
+from app.services.storage import criar_cache_audio_gcs
 from app.services.transcricao import (
     MAX_BYTES_DO_AUDIO,
     Transcritor,
@@ -104,15 +95,6 @@ def _criar_banco(settings: Settings) -> Banco:
     if settings.app_env == "prod" or os.environ.get("FIRESTORE_EMULATOR_HOST"):
         return FirestoreBanco(firestore.Client(project=settings.gcp_project_id))
     return MemoryBanco()
-
-
-def _criar_armazenamento(settings: Settings) -> Armazenamento:
-    """Cloud Storage em produção; em dev local, uma pasta `exports/` (que o git ignora)."""
-    if settings.app_env == "prod":
-        return criar_armazenamento_gcs(
-            projeto=settings.gcp_project_id, bucket=settings.export_bucket
-        )
-    return ArmazenamentoLocal(Path("exports"))
 
 
 def _handler_da_nuvem(settings: Settings) -> logging.Handler | None:
@@ -169,7 +151,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         api_key=settings.waha_api_key,
         session=settings.waha_session,
     )
-    letras = LrclibProvider(base_url=settings.lyrics_url)
     banco = _criar_banco(settings)
     # M46 (ADR-0044): o custo estimado de cada chamada de IA alimenta o orçamento diário.
     orcamento = Orcamento(
@@ -189,8 +170,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         tutor=criar_tutor(settings),
         criar_conversa=lambda chat_id: Conversa(canal, chat_id),
         nivel_padrao=settings.user_level,
-        status_da_sessao=canal.session_status,
-        exportador=ExportadorExcel(_criar_armazenamento(settings)),
         prefixo_do_grupo=settings.group_prefix,
         max_caracteres=settings.max_caracteres,
         limites=settings.limites,
@@ -206,13 +185,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             numero_do_bot=settings.bot_number,
         ),
         fuso=ZoneInfo(settings.timezone),
-        letras=letras,
         audio=_criar_audio(settings),
     )
     app.state.router = router
 
-    # M10: lembretes de revisão espaçada (seção 5.7, ADR-0012) — laço em segundo plano, um
-    # minuto por vez; só dispara com um chat_id real já aprendido de uma mensagem recebida.
+    # M10/M35/M36: revisão diária e desafio semanal dos grupos (ADR-0012) — laço em segundo plano,
+    # um minuto por vez; só dispara com um chat_id real já aprendido de uma mensagem recebida.
     agendador = Agendador(
         router=router,
         banco=banco,
@@ -238,7 +216,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         with contextlib.suppress(asyncio.CancelledError):
             await tarefa_do_agendador
         await canal.aclose()
-        await letras.aclose()
 
 
 app = FastAPI(title="vocabot", lifespan=_lifespan)
@@ -364,26 +341,21 @@ async def _tratar_mensagem(
         return
 
     acesso = _acesso(settings, channel, banco)
-    aluno = numero_esta_na_lista(numero_resolvido, settings.numeros_permitidos) or settings.eh_dono(
-        numero_resolvido
-    )
-    e_admin = await run_in_threadpool(admin.eh_admin, acesso, numero_resolvido)
+    if not await run_in_threadpool(admin.eh_admin, acesso, numero_resolvido):
+        # ADR-0062: o privado é só do dono e dos admins, e só para os comandos de admin. Qualquer
+        # outro número é ignorado em silêncio, por uma regra fixa: nada é gravado, nenhuma
+        # resposta, sem `sendSeen`, e a IA nunca é chamada.
+        logger.info("mensagem privada de quem não é admin ignorada")
+        return
 
     # Responde ao número REAL do remetente (o que o WhatsApp informa). Ele passou pela allowlist,
     # mas pode diferir do número do .env no nono dígito: a conta pode estar registrada sem o 9, e
     # enviar para o número do .env dá "no LID found" no WAHA.
     chat_destino = f"{numero_resolvido}@c.us"
 
-    if not aluno and not e_admin:
-        # Sem plano: a IA nunca é chamada, nada é lido nem gravado, sem `sendSeen`. Só o aviso
-        # (no máximo um por semana, ADR-0018) e depois silêncio.
-        if payload.has_media or payload.body.strip():
-            await _avisar_sem_plano(acesso, numero_resolvido, chat_destino)
-        return
-
     try:
         await _despachar(
-            payload, channel, banco, router, tarefas, chat_destino, acesso, numero_resolvido, aluno
+            payload, channel, banco, router, tarefas, chat_destino, acesso, numero_resolvido
         )
     except Exception:
         # Quem escreveu já está autorizado: o aviso vai só ao próprio chat, nunca a outro aluno.
@@ -401,7 +373,6 @@ async def _despachar(
     chat_destino: str,
     acesso: admin.Acesso,
     numero: str,
-    aluno: bool,
 ) -> None:
     if not payload.has_media and not payload.body.strip():
         # Sem texto nem mídia: o WAHA não conseguiu decifrar (ou é um tipo que não tratamos).
@@ -420,7 +391,7 @@ async def _despachar(
         comando=_nome_do_comando(payload.body, "/"),
     )
     await channel.send_seen(chat_destino)
-    tarefas.add_task(_responder, router, payload, channel, chat_destino, acesso, numero, aluno)
+    tarefas.add_task(_responder, router, payload, channel, chat_destino, acesso, numero)
 
 
 async def _responder(
@@ -430,36 +401,23 @@ async def _responder(
     chat_destino: str,
     acesso: admin.Acesso,
     numero: str,
-    aluno: bool,
 ) -> None:
-    """Roda depois do 200. É a fronteira do sistema: nada que aconteça aqui pode escapar."""
+    """Roda depois do 200. É a fronteira do sistema: nada que aconteça aqui pode escapar. Quem
+    chega aqui é dono ou admin (ADR-0062): um comando de admin recebe a resposta; qualquer outra
+    coisa (texto, mídia), a lista fixa de comandos, sem IA."""
     try:
-        if not payload.has_media and admin.eh_comando_de_admin(payload.body):
-            resposta = await admin.comando_privado(acesso, payload.body, numero)
-            if resposta is not None:
-                if isinstance(resposta, admin.Arquivo):
-                    await channel.send_file(
-                        chat_destino,
-                        resposta.nome,
-                        resposta.conteudo,
-                        resposta.tipo,
-                        resposta.legenda,
-                    )
-                    return
-                for parte in [resposta] if isinstance(resposta, str) else resposta:
-                    await router.responder_avulso(chat_destino, parte)
-                return
-        if not aluno:
-            # Um admin que não é aluno só usa os comandos de admin: o resto é "sem plano".
-            await _avisar_sem_plano(acesso, numero, chat_destino)
-            return
-        if payload.has_media:
-            await router.midia_nao_suportada(chat_destino)
+        resposta = (
+            None if payload.has_media else await admin.comando_privado(acesso, payload.body, numero)
+        )
+        if resposta is None:
+            await router.responder_avulso(chat_destino, messages.ajuda_do_admin(acesso.prefixo))
+        elif isinstance(resposta, admin.Arquivo):
+            await channel.send_file(
+                chat_destino, resposta.nome, resposta.conteudo, resposta.tipo, resposta.legenda
+            )
         else:
-            # M28: leva o nome do WhatsApp para o `Profile.nome` (nunca o telefone) — `Autor` num
-            # espaço privado não muda o roteamento (só grupo confere `grupo_prefixo`).
-            autor = Autor(numero=numero, nome=payload.nome_do_remetente())
-            await router.processar(payload.body, chat_destino, autor)
+            for parte in [resposta] if isinstance(resposta, str) else resposta:
+                await router.responder_avulso(chat_destino, parte)
     except Exception:
         logger.exception("falha ao processar mensagem")
         with contextlib.suppress(Exception):
@@ -474,26 +432,8 @@ def _acesso(settings: Settings, channel: ChannelComLid, banco: Banco) -> admin.A
         grupos_fixos=settings.grupos_permitidos,
         max_grupos=settings.max_groups,
         agora=agora_utc,
-        contato=settings.contact_email,
         prefixo=settings.group_prefix,
     )
-
-
-async def _avisar_sem_plano(acesso: admin.Acesso, numero: str, chat_destino: str) -> None:
-    """O aviso "você não tem um plano", no máximo uma vez por semana por número: a marca vive em
-    `processed/`, então a TTL de 7 dias a expira sozinha."""
-    if not await run_in_threadpool(
-        acesso.banco.marcar_processada, _chave_do_aviso(numero), agora_utc()
-    ):
-        return
-    registrar_evento(logger, "numero_sem_plano")
-    with contextlib.suppress(Exception):
-        await acesso.canal.send_text(chat_destino, messages.sem_plano(acesso.contato))
-
-
-def _chave_do_aviso(numero: str) -> str:
-    """A marca do aviso vive em `processed/` (TTL de 7 dias) sem guardar o telefone em claro."""
-    return "aviso_" + hashlib.sha256(numero.encode()).hexdigest()[:32]
 
 
 _GRUPOS_JA_LOGADOS: set[str] = set()

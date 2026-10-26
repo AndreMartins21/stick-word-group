@@ -20,7 +20,6 @@ from tests.webhook_helpers import (
     GRUPO_FIXO,
     Ambiente,
     _do_grupo,
-    _privada,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -195,13 +194,6 @@ def test_activate_de_aluno_num_grupo_ativo_e_silencio_e_nao_vira_comando_desconh
     )
 
     assert ambiente.canal.textos_enviados == []
-
-
-def test_o_privado_do_dono_aceita_exclamacao_como_apelido_da_barra(ambiente: Ambiente) -> None:
-    ambiente.cliente.post("/waha/webhook", json=_privada(DONO, "!list"))
-
-    ((chat, texto),) = ambiente.canal.textos_enviados
-    assert chat == f"{DONO}@c.us" and texto == messages.SEM_ENTRADAS
 
 
 def test_review_pelo_webhook_nao_marca_ninguem(ambiente: Ambiente) -> None:

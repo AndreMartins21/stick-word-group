@@ -64,7 +64,6 @@ def cliente(fake_channel: FakeChannel) -> Iterator[TestClient]:
         BOT_NUMBER="5531988887777",
         WAHA_API_KEY="fake-local-key",
         GCP_PROJECT_ID="meu-projeto-local",
-        EXPORT_BUCKET="meu-projeto-vocabot-exports",
         WAHA_HOOK_HMAC_KEY=CHAVE_HMAC,
     )
     app.dependency_overrides[get_settings] = lambda: settings
@@ -127,7 +126,6 @@ def test_sem_chave_configurada_nao_exige_assinatura(fake_channel: FakeChannel) -
         BOT_NUMBER="5531988887777",
         WAHA_API_KEY="fake-local-key",
         GCP_PROJECT_ID="meu-projeto-local",
-        EXPORT_BUCKET="meu-projeto-vocabot-exports",
     )
     app.dependency_overrides[get_settings] = lambda: settings_sem_hmac
     app.dependency_overrides[get_channel] = lambda: fake_channel

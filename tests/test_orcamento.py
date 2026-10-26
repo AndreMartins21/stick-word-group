@@ -16,7 +16,14 @@ from app.services.fake_llm import FakeTutor
 from app.services.lembretes import Agendador
 from app.services.orcamento import INTERVALO_DE_GRAVACAO, Orcamento
 from tests.helpers import CHAT, T0, eventos, montar
-from tests.webhook_helpers import ALUNO_COMUM, DONO, Ambiente, _privada, criar_ambiente
+from tests.webhook_helpers import (
+    ALUNO_COMUM,
+    DONO,
+    GRUPO_FIXO,
+    Ambiente,
+    _do_grupo,
+    criar_ambiente,
+)
 
 FUSO = ZoneInfo("America/Sao_Paulo")
 MEIO_DIA = datetime(2026, 10, 12, 15, 0, tzinfo=UTC)  # 12h em São Paulo
@@ -128,7 +135,9 @@ def test_orcamento_esgotado_pausa_a_ia_e_avisa_o_chat_uma_vez(ambiente: Ambiente
     orcamento.registrar(5.0)
     with criar_ambiente(orcamento=orcamento) as a:
         for _ in range(3):
-            a.cliente.post("/waha/webhook", json=_privada(ALUNO_COMUM, "stall"))
+            a.cliente.post(
+                "/waha/webhook", json=_do_grupo(GRUPO_FIXO, f"{ALUNO_COMUM}@c.us", "!add stall")
+            )
 
         textos = [t for _, t in a.canal.textos_enviados]
         assert textos == [messages.PAUSA_DE_HOJE]
@@ -139,7 +148,7 @@ def test_o_dono_segue_atendido_com_o_orcamento_esgotado() -> None:
     orcamento, _, _ = _orcamento(limite=1.0)
     orcamento.registrar(5.0)
     with criar_ambiente(orcamento=orcamento) as a:
-        a.cliente.post("/waha/webhook", json=_privada(DONO, "stall"))
+        a.cliente.post("/waha/webhook", json=_do_grupo(GRUPO_FIXO, f"{DONO}@c.us", "!add stall"))
 
         assert messages.PAUSA_DE_HOJE not in [t for _, t in a.canal.textos_enviados]
         assert a.tutor.chamadas != []
@@ -322,17 +331,16 @@ def test_grupo_com_cota_esgotada_e_avisado_uma_vez_e_o_outro_segue(ambiente: Amb
     orcamento, _, _ = _com_teto_mensal(cota=1.0)
     orcamento.registrar(2.0, "120363000000000099@g.us")  # o grupo fixo dos testes
     with criar_ambiente(orcamento=orcamento) as a:
-        from tests.webhook_helpers import GRUPO_FIXO, _do_grupo
-
+        a.banco.ativar_grupo(GRUPO, nome="Turma B", por=DONO, agora=T0)
         for _ in range(3):
             a.cliente.post(
                 "/waha/webhook", json=_do_grupo(GRUPO_FIXO, f"{ALUNO_COMUM}@c.us", "!list")
             )
-        a.cliente.post("/waha/webhook", json=_privada(ALUNO_COMUM, "stall"))
+        a.cliente.post("/waha/webhook", json=_do_grupo(GRUPO, f"{ALUNO_COMUM}@c.us", "!add stall"))
 
         textos = [t for _, t in a.canal.textos_enviados]
         assert textos.count(messages.PAUSA_DO_GRUPO) == 1
-        assert a.tutor.chamadas != []  # o privado do mesmo aluno segue
+        assert a.tutor.chamadas != []  # o outro grupo do mesmo aluno segue
 
 
 async def test_agendador_avisa_o_dono_da_cota_do_grupo_e_do_mes() -> None:

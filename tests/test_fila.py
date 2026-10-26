@@ -17,8 +17,8 @@ from app.repo.memory import MemoryBanco
 from app.services.fake_llm import FakeTutor
 from tests.helpers import eventos, explicacao_stall
 
-CHAT_A = "5531999990001@c.us"
-CHAT_B = "5531999990002@c.us"
+CHAT_A = "120363000000000001@g.us"
+CHAT_B = "120363000000000002@g.us"
 
 
 async def _sem_espera(_: float) -> None:
@@ -77,7 +77,7 @@ async def test_fila_cheia_descarta_o_excedente_em_silencio(
 
     with caplog.at_level(logging.INFO):
         tarefas = [
-            asyncio.create_task(router.processar(f"word{i}", CHAT_A, autor)) for i in range(6)
+            asyncio.create_task(router.processar(f"!add word{i}", CHAT_A, autor)) for i in range(6)
         ]
         await asyncio.sleep(0.1)  # as duas primeiras entraram; as outras quatro foram descartadas
         liberar.set()
@@ -95,8 +95,8 @@ async def test_chats_diferentes_nao_dividem_a_fila(canal: FakeChannel) -> None:
     router = _router(canal, tutor, max_fila_por_chat=1, max_processamentos=4)
 
     tarefas = [
-        asyncio.create_task(router.processar("stall", CHAT_A, Autor(numero="5531999990001"))),
-        asyncio.create_task(router.processar("stall", CHAT_B, Autor(numero="5531999990002"))),
+        asyncio.create_task(router.processar("!add stall", CHAT_A, Autor(numero="5531999990001"))),
+        asyncio.create_task(router.processar("!add stall", CHAT_B, Autor(numero="5531999990002"))),
     ]
     await asyncio.sleep(0.1)
     liberar.set()
@@ -113,7 +113,7 @@ async def test_vagas_globais_limitam_chats_processando_ao_mesmo_tempo(canal: Fak
     tarefas = [
         asyncio.create_task(
             router.processar(
-                "stall", f"55319999900{i:02d}@c.us", Autor(numero=f"55319999900{i:02d}")
+                "!add stall", f"1203630000000000{i:02d}@g.us", Autor(numero=f"55319999900{i:02d}")
             )
         )
         for i in range(6)
@@ -139,6 +139,6 @@ async def test_contador_da_fila_volta_a_zero_inclusive_com_erro(canal: FakeChann
 
     for _ in range(3):
         with pytest.raises(RuntimeError):
-            await router.processar("stall", CHAT_A, autor)
+            await router.processar("!add stall", CHAT_A, autor)
 
     assert router._na_fila == {}

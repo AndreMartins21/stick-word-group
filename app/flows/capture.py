@@ -98,7 +98,6 @@ async def _comecar_pratica(
             entrada.nota,
             sentido.exemplo,
             outros_sentidos=[s for s in explicacao.sentidos if s.id != sentido.id],
-            grupo=d.grupo_prefixo,
             pt=d.pt,
         )
     )
@@ -126,7 +125,7 @@ async def _avisar_que_ja_existe(d: Deps, entrada: Entry, sentido: Sense) -> Sess
             entrada.sentido,
             exemplo,
             outros_sentidos=entrada.outros_sentidos,
-            grupo=d.grupo_prefixo,
+            p=d.p,
             pt=d.pt,
         )
     )
@@ -205,7 +204,7 @@ def gravar_entrada(
         nota=explicacao.nota,
         tags=explicacao.tags,
         origem_texto=explicacao.frase_contexto,
-        autor_id=d.autor_id if d.em_grupo else None,  # M28: quem salvou, só faz sentido em grupo
+        autor_id=d.autor_id,  # M28: quem salvou
         criado_em=agora,
         atualizado_em=agora,
     )

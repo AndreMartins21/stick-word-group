@@ -134,7 +134,6 @@ def _acesso_do(m: Montagem):  # type: ignore[no-untyped-def]
         grupos_fixos=(),
         max_grupos=10,
         agora=lambda: T0,
-        contato="x@y.z",
     )
 
 

@@ -1,13 +1,17 @@
-# Vocabot
+# stick-word-group
 
-Bot de WhatsApp, de uso pessoal, para praticar vocabulário de inglês (nível B1→B2) e exportar
-tudo para uma **planilha Excel**. Você manda uma palavra, o bot explica, você escreve uma frase, ele avalia —
-e tudo isso fica guardado (sentidos, frases corrigidas, sinônimos, revisões).
+Bot de WhatsApp para **turmas de inglês em grupo**: a turma junta vocabulário (`!add`, ou marcando o
+bot com a palavra), pratica com o menu de exemplos e sinônimos, faz a **revisão diária** sem marcar
+ninguém e o **desafio semanal** com perguntas da IA. Admins ativam o bot nos grupos e recebem o
+`/ranking` de engajamento em PDF.
 
-> **Status:** código pronto até o M10 (interface em inglês, roteamento por IA, revisão espaçada com
-> lembretes agendados); implantado na VM desde o M8, com o deploy do M9/M10 ainda pendente. A
-> especificação completa está em [`spec/spec-inicial.md`](spec/spec-inicial.md); o trabalho anda
-> marco a marco (seção 9 da spec).
+No **privado**, o bot só atende o dono e os admins, e só com os comandos de admin; qualquer outro
+número é ignorado por uma regra fixa no webhook, sem gastar IA (ADR-0062). O estudo individual, no
+estilo do Anki, é o projeto irmão **stick-word**.
+
+> A especificação está em [`spec/spec-inicial.md`](spec/spec-inicial.md); o trabalho anda marco a
+> marco (seção 9 da spec). A separação dos dois projetos está no
+> [ADR-0062](docs/adr/0062-separacao-em-stick-word-e-stick-word-group.md).
 
 ## Stack
 
@@ -18,7 +22,6 @@ e tudo isso fica guardado (sentidos, frases corrigidas, sinônimos, revisões).
 | Canal WhatsApp | WAHA Core (self-hosted, engine GOWS) |
 | IA | Gemini no Vertex AI (SDK `google-genai`), sem chave de API |
 | Banco | Firestore (modo nativo) |
-| Arquivos | Cloud Storage + URL assinada V4 |
 | Pronúncia | Google Cloud Text-to-Speech (voz Neural2, OGG/Opus) + cache no Cloud Storage |
 | Hospedagem | 1 VM `e2-micro` (nível gratuito) com Docker Compose |
 | Ferramentas | uv, ruff, mypy, pytest, pre-commit |
@@ -38,26 +41,27 @@ Edite o `.env` com **valores falsos** para desenvolvimento local — ele nunca �
 testes não dependem de credencial nem de rede.
 
 ```bash
-make sim       # ciclo completo no terminal, sem WhatsApp
+make sim       # um grupo no terminal, sem WhatsApp (linhas `ana: !add stall`)
 make run       # sobe a API em http://localhost:8000 (webhook do WAHA)
 make help      # todos os alvos
 ```
 
 ## Comandos do bot
 
-Manda uma palavra em inglês (`stall` ou `stall | the talks stalled`) e segue o menu numerado
-(1 ouvir a pronúncia, 2 exemplos, 3 sinônimos, 4 salvar, 5 ignorar).
-`/help` lista tudo: `/list [página]` (numerada), `/info N` (frases, sinônimos etc. de uma palavra),
-`/listen N|palavra` (pronúncia de uma palavra já salva), `/pending`, `/practice [N|palavra]`, `/review`, `/song nome [- artista]` (prática com música, M13), `/reminders 3 9h-22h`, `/profile`, `/export`,
-`/delete N|palavra`, `/level B1-B2`, `/cancel`, `/status`. O `/export` devolve um link (válido por 24 h)
-para um `.xlsx` com três abas: `Words`, `Sentences` e `Synonyms`.
+**No grupo** (só mensagens que começam com `!` ou `/`, ou que marcam/citam o bot; o resto é a
+conversa da turma e o bot não lê): `!add palavra` (ou `@bot palavra`), `!list [página]`,
+`!practice [N|palavra]`, `!review`, `!delete N|palavra`, `!daily`, `!weekly`, `!group`, `!level`,
+`!help`. Durante a prática, `!2`…`!5` ou `@bot` + a frase. Admins: `!activate [nome]`,
+`!deactivate`, `!teacher`/`!student`, `!daily 19h`, `!weekly now`.
+
+**No privado** (só dono e admins): `/groups` (e `/groups off N`), `/teachers [NÚMERO]`,
+`/ranking [meses]` (PDF) e, só o dono, `/admin add|remove NÚMERO`. Qualquer outro texto de um admin
+recebe essa lista; de qualquer outro número, silêncio.
 
 ## Pronúncia em áudio (M23)
 
-Sob demanda: a **opção 1** do menu de uma palavra (`!1` no grupo) ou `/listen N|palavra` mandam
-**duas notas de voz**, na ordem: o termo e a frase de exemplo do card. Pela opção 1, o bot em seguida
-pergunta o que fazer, com as opções 2 a 5 (a 1 não repete). A conversa continua onde estava; `/listen`
-manda só as vozes (com um texto de abertura), sem menu.
+Automática (M25, ADR-0026): ao explicar uma palavra o bot manda **duas notas de voz**, na ordem, o
+termo e a frase de exemplo do card. No desafio semanal, `2` lê a pergunta em voz alta.
 
 Como o áudio é gerado:
 
@@ -76,7 +80,7 @@ Operação:
   `APP_ENV=prod`, a pronúncia fica indisponível) e `TTS_VOICE` (padrão `en-US-Neural2-F`). Trocar a voz
   gera arquivos novos no cache; os antigos ficam no bucket.
 - **Ativar num projeto novo:** `infra/setup.sh` habilita `texttospeech.googleapis.com`, cria o bucket
-  (privado, **sem** ciclo de vida, ao contrário do de exports) e dá `objectAdmin` só nele à conta da VM.
+  (privado, **sem** ciclo de vida) e dá `objectAdmin` só nele à conta da VM.
   Sem isso, o log do bot mostra `403 SERVICE_DISABLED` ou erro de bucket e o aluno vê "I couldn't make
   the audio right now".
 - **Custo:** cota gratuita mensal de 1M de caracteres em Neural2 (4M em Standard/WaveNet). Um termo ou
@@ -96,7 +100,7 @@ antes, e `DRY_RUN=1` só mostra os comandos.
 ```bash
 cp infra/.env.infra.example infra/.env.infra   # preencha GCP_PROJECT_ID, ALLOWED_NUMBER, BOT_NUMBER
 DRY_RUN=1 bash infra/setup.sh   # revisar o que será criado (só as leituras rodam)
-bash infra/setup.sh             # APIs, Firestore + TTL, conta de serviço, buckets (exports e áudio), segredos, firewall, VM
+bash infra/setup.sh             # APIs, Firestore + TTL, conta de serviço, bucket de áudio, segredos, firewall, VM
 bash infra/deploy.sh            # empacota, copia via IAP, renderiza o .env na VM e sobe o compose
 bash infra/pair.sh              # túnel (porta local 13000) p/ o painel do WAHA: escaneie o QR com o número do bot
 bash infra/smoke_test.sh        # bot em /health e sessão do WAHA em WORKING
@@ -137,39 +141,14 @@ Notas de operação:
   (Gemini de verdade, com `gcloud auth application-default login`); `make evals` mede a avaliação
   de frases; `make test-emulador` roda o contrato do `Repository` contra o emulador do Firestore.
 
-## Vários alunos (M14, ADR-0017)
+## Grupos e acesso (M15-M17, ADR-0018, ADR-0062)
 
-Cada número em `ALLOWED_NUMBERS` (mais o `ALLOWED_NUMBER`, que continua valendo e é o dono) conversa
-com o bot no privado e tem o próprio caderno: palavras, sessão, perfil e lembretes ficam em
-`espacos/{chat}` no Firestore, e um aluno nunca vê os dados de outro. `ALLOWED_GROUPS` autoriza
-grupos fixos. **Quem não está na lista** recebe só um aviso ("você não tem um plano", com o e-mail de
-`CONTACT_EMAIL`), no máximo uma vez por semana, e a IA nunca é chamada para essa pessoa.
-
-**Grupos (M15, ADR-0018):** o bot só trabalha num grupo depois que um **admin** (o dono ou alguém em
-`/admin add NUMERO`, comando só do dono, no privado) escrever `!activate` nele; `MAX_GROUPS` limita
-quantos. Um grupo em que o bot foi adicionado e ninguém ativou fica em silêncio, e o bot **sai dele
-depois de 24 h**. `/groups` (dono e admins, no privado) lista os grupos e `/groups off N` desativa um.
-No celular do bot, configure Privacidade → Grupos → "Meus contatos", para só quem o salvou poder
-adicioná-lo.
-
-**Dentro do grupo (M16, ADR-0019):** o bot só lê mensagens que começam com `!` (`GROUP_PREFIX`); o
-resto é a conversa da turma e ele não lê nem grava. `!add palavra`, `!list`, `!practice`, `!review`,
-`!reminder 3`, `!group` e `!help`; durante a prática, `!1`, `!2`, `!3` ou `!` + a frase. A revisão em grupo (M17, ADR-0020)
-marca **um aluno por card**, em rodízio, com menção real; só a resposta de quem foi marcado vale a nota, e
-sem resposta em 3 h o card passa ao próximo aluno (depois fecha). Testar sem WhatsApp:
-`make sim ARGS=--grupo` (linhas `ana: !add stall`; `~timeout` força o prazo).
-
-**Migrar o caderno de um usuário só** (roda **na sua máquina**, com `gcloud auth application-default
-login`, não na VM). A ordem importa, porque o merge faz o deploy e o bot antigo continua gravando na
-raiz até lá:
-
-```bash
-python -m scripts.migrar_multiusuario --projeto ID            # dry run: só mostra o que copiaria
-python -m scripts.migrar_multiusuario --projeto ID --executar # copia de verdade (idempotente)
-# merge do PR (deploy) e smoke test; depois, de novo, para trazer o que o bot antigo gravou:
-python -m scripts.migrar_multiusuario --projeto ID --executar
-python -m scripts.migrar_multiusuario --projeto ID --limpar-origem  # só com a cópia completa
-```
+Cada grupo é um espaço (`espacos/{grupo}` no Firestore), com o próprio caderno da turma. O bot só
+trabalha num grupo depois que um **admin** (o dono, `OWNER_NUMBER` ou o legado `ALLOWED_NUMBER`, ou
+alguém em `/admin add NUMERO`) escrever `!activate` nele; `MAX_GROUPS` limita quantos e
+`ALLOWED_GROUPS` autoriza grupos fixos. Um grupo em que o bot foi adicionado e ninguém ativou fica em
+silêncio, e o bot **sai dele depois de 24 h**. No celular do bot, configure Privacidade → Grupos →
+"Meus contatos", para só quem o salvou poder adicioná-lo.
 
 ## Deploy contínuo (M11, ADR-0013)
 

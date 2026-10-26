@@ -6,7 +6,7 @@ antes de ligar em produção (a cota grátis é 50.000 leituras/dia — seção 
     python -m scripts.snapshot --projeto ID --destino ./local --executar
     python -m scripts.snapshot --projeto ID --bucket BUCKET --executar
 
-- Roda na máquina local, com as credenciais padrão (ADC) — como `scripts.migrar_multiusuario`.
+- Roda na máquina local, com as credenciais padrão (ADC).
 - O dry run já faz as leituras (não tem como contar sem ler); só não grava nem marca o dia como
   feito, então pode ser repetido à vontade sem afetar o `Agendador` em produção.
 - Com `--destino PASTA` grava localmente, no mesmo layout Hive do GCS — útil para inspecionar o

@@ -1,6 +1,6 @@
 """Modelos de domínio (seções 6 e 7.1 da spec): o que entra no banco ou na sessão, e os
 schemas de saída do LLM (`Explanation`, `Evaluation`, `Exemplos`, `Expansoes`, `Sinonimos`,
-`Roteamento`, `LinhaDaMusica`)."""
+`Roteamento`, `Revisao`, `PerguntasSemanais`)."""
 
 from __future__ import annotations
 
@@ -31,7 +31,6 @@ Intencao = Literal[
     "frase", "exemplos", "sinonimos", "salvar", "nova_palavra", "pedido", "fora_do_escopo"
 ]
 QualidadeRevisao = Literal["de_novo", "dificil", "bom", "facil"]
-CompreensaoDoVerso = Literal["entendeu", "parcial", "nao_entendeu"]
 
 
 def agora_utc() -> datetime:
@@ -41,15 +40,11 @@ def agora_utc() -> datetime:
 class Estado(StrEnum):
     """Estados da conversa (seção 5.1, M9/M10): só há uma palavra em foco por vez (`IDLE`) e um
     único menu de ações enquanto ela está em foco (`AWAIT_ACTION`); `REVIEWING` é a sessão de
-    revisão espaçada iniciada pelo bot (seção 5.7); os `SONG_*` são a prática com letra de música
-    (M13, seção 5.8): escolher entre homônimas, explicar verso a verso, salvar as expressões."""
+    revisão diária do grupo (seção 5.2b); `WEEKLY_QUIZ`, o desafio semanal."""
 
     IDLE = "IDLE"
     AWAIT_ACTION = "AWAIT_ACTION"
     REVIEWING = "REVIEWING"
-    SONG_PICKING = "SONG_PICKING"
-    SONG_PRACTICE = "SONG_PRACTICE"
-    SONG_SAVING = "SONG_SAVING"
     WEEKLY_QUIZ = "WEEKLY_QUIZ"  # M36: o desafio semanal do grupo (seção 5.2b)
 
 
@@ -270,27 +265,6 @@ class AvaliacaoDaPergunta(BaseModel):
         return self
 
 
-MAX_EXPRESSOES_POR_VERSO = 3
-
-
-class LinhaDaMusica(BaseModel):
-    """Saída de `song_line` (M13, seção 5.8): julga a explicação do aluno para um verso da música
-    (em inglês ou português) e aponta o que ele parece não ter entendido."""
-
-    compreensao: CompreensaoDoVerso
-    feedback: str  # em inglês, curto (máx. 4 linhas); nunca repete o verso inteiro
-    significado: str = ""  # o sentido do verso em poucas palavras, quando o aluno não acertou
-    expressoes: list[str] = Field(default_factory=list)  # do próprio verso, as que ele não pegou
-
-    @model_validator(mode="after")
-    def _curto(self) -> LinhaDaMusica:
-        if len(self.feedback.strip().splitlines()) > MAX_LINHAS_EXPLICACAO:
-            raise ValueError(f"`feedback` deve ter no máximo {MAX_LINHAS_EXPLICACAO} linhas")
-        if len(self.expressoes) > MAX_EXPRESSOES_POR_VERSO:
-            raise ValueError(f"`expressoes` deve ter no máximo {MAX_EXPRESSOES_POR_VERSO} itens")
-        return self
-
-
 class SentidoSalvo(BaseModel):
     traducao: str
     definicao: str
@@ -384,19 +358,11 @@ class Profile(BaseModel):
     # M28 (snapshot de métricas, spec 12): o nome que o WhatsApp informa (o "push name"), como já
     # é feito em `Membro`; nunca o telefone. `None` até a primeira mensagem trazer um.
     nome: str | None = None
-    # Lembretes de revisão espaçada (M10, seção 5.7). `lembretes_por_dia=0` = desligado; o padrão
-    # (M24, ADR-0025) é ligado, 1x/dia às 12h — só vale para perfil novo, não muda quem já existe.
-    lembretes_por_dia: int = 1
-    janela_inicio: int = 12
-    janela_fim: int = 21
     chat_id: str | None = None  # destino real do WhatsApp, aprendido de uma mensagem recebida
-    proximo_lembrete: datetime | None = None
-    lembrete_sem_resposta: bool = False
-    avisou_lembretes: bool = False  # já mostrou a dica de /lembretes uma vez
-    # Tamanho da fila de revisão (M24): `None` = dinâmico, `MIN(palavras do aluno, 7)`; um valor
-    # fixo (`/reviewsize` ou o último parâmetro de `/reminders`) sobrepõe o dinâmico e o do grupo.
+    # Tamanho da rodada de revisão (M24): `None` = `LIMITE_POR_SESSAO_GRUPO`; um valor fixo
+    # (`!daily ... N`) sobrepõe o padrão.
     tamanho_revisao: int | None = None
-    # Revisão diária do grupo (M35, ADR-0033): o grupo ignora `lembretes_por_dia`/janela. Horário
+    # Revisão diária do grupo (M35, ADR-0033). Horário
     # no fuso da turma; fora do fim de semana por padrão. `revisoes_sem_resposta` conta as
     # revisões agendadas seguidas sem nenhuma mensagem do grupo (3 pausam o agendamento).
     diaria_ligada: bool = True
@@ -413,22 +379,6 @@ class Profile(BaseModel):
     semanal_minuto: int = 0
     semanal_tamanho: int | None = None
     proxima_semanal: datetime | None = None
-
-
-class OpcaoDeMusica(BaseModel):
-    """Uma candidata da busca, guardada na sessão enquanto o aluno escolhe (sem a letra)."""
-
-    id: int
-    titulo: str
-    artista: str
-
-
-class ExpressaoDaMusica(BaseModel):
-    """Uma palavra/expressão que o aluno não pegou, com o verso onde ela aparece (o contexto
-    que vai para a explicação ao salvar)."""
-
-    texto: str
-    verso: str
 
 
 class Sessao(BaseModel):
@@ -461,15 +411,6 @@ class Sessao(BaseModel):
     semanal_indice: int = 0
     semanal_respondidas: int = 0
     semanal_puladas: int = 0
-    # Prática com música (M13, seção 5.8): as candidatas de uma busca (SONG_PICKING), a música
-    # escolhida com os versos a praticar e o índice do verso atual (SONG_PRACTICE), e as
-    # expressões que o aluno não pegou, oferecidas para salvar no fim (SONG_SAVING).
-    musica_opcoes: list[OpcaoDeMusica] = Field(default_factory=list)
-    musica_titulo: str | None = None
-    musica_artista: str | None = None
-    musica_versos: list[str] = Field(default_factory=list)
-    musica_indice: int = 0
-    musica_expressoes: list[ExpressaoDaMusica] = Field(default_factory=list)
     # Revisão em grupo (M17, ADR-0020): quem está marcado para o card atual, até quando, e quantas
     # vezes o card já foi repassado a outro aluno por falta de resposta (no máximo uma).
     marcado_id: str | None = None

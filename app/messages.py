@@ -13,15 +13,12 @@ from collections.abc import Iterable, Sequence
 from datetime import datetime
 
 from app.domain.agenda_grupo import JITTER_MINUTOS, NOMES_DOS_DIAS
-from app.domain.lembretes import TAMANHO_REVISAO_PADRAO
 from app.domain.models import (
     AvaliacaoDaPergunta,
     Entry,
     Evaluation,
     Expansion,
-    LinhaDaMusica,
     NivelUsuario,
-    OpcaoDeMusica,
     Profile,
     Revisao,
     Sense,
@@ -35,19 +32,11 @@ from app.domain.ranking import Ranking as RankingGeral
 MIDIA_NAO_SUPORTADA = "📎 I can only read *text* for now — can you type the word instead? 🙂"
 ERRO_INESPERADO = "⚠️ Something went wrong on my end. Try again in a bit?"
 ERRO_IA = "🤖 I couldn't reach the AI right now. Try again in a bit?"
-CANCELADO = "No problem, I stopped there. Anything already saved is still saved. Send me another word whenever you want!"
 ENCERRADO = "Alright! Send me another word whenever you want. 🙂"
-COMANDO_DESCONHECIDO = "I don't know that command. Send /help to see what I have."
-SEM_ENTRADAS = "You don't have any saved words yet. Send me an English word to get started!"
 SEM_PENDENTES = "No pending words. 🎉"
-EXPORTACAO_INDISPONIVEL = "Export isn't available here yet."
-SEM_EXPORTAVEIS = "There's nothing to export yet. Send me an English word to get started!"
-USO_DO_INFO = "Tell me which word: /info 3 (the number from /list) or /info stall."
-USO_DO_LISTEN = "Tell me which word: /listen 3 (the number from /list) or /listen stall."
 AUDIO_SEM_FALA = "🎙️ I couldn't hear any words in that audio. Can you try again?"
 ERRO_TRANSCRICAO = "🎙️ I couldn't listen to that audio right now. Try again in a bit?"
 ERRO_AUDIO = "🔊 I couldn't make the audio right now. Try again in a bit?"
-PAGINA_INVALIDA = "That page doesn't exist. Use /list to see the first one."
 
 
 DEVAGAR = "⏳ Easy there! I can't keep up that fast. Let's continue in a minute."
@@ -109,9 +98,7 @@ def pagina_invalida(p: str = "/") -> str:
     return f"That page doesn't exist. Use {p}list to see the first one."
 
 
-def sem_entradas(p: str = "/") -> str:
-    if p == "/":
-        return SEM_ENTRADAS
+def sem_entradas() -> str:
     return (
         "The class doesn't have any saved words yet. Add one by tagging me with a word, like stall."
     )
@@ -128,34 +115,10 @@ _CABECALHO_VEREDITO: dict[Veredito, str] = {
     "incorreta": "❌ *Not quite.*",
 }
 
-AJUDA = """*How I work* 🤓
-Send me a word or expression in English (you can include the sentence where you saw it: `stall | the talks stalled`). I'll explain it, you practice writing a sentence, and I'll give you feedback.
-
-*Commands*
-/list [page] — your words, numbered
-/info 3 — everything about a word (sentences, synonyms…)
-/listen 3 — hear how a word sounds (the word and its example)
-/pending — the ones you haven't practiced yet
-/practice [word] — practice one (no word: the oldest pending one)
-/review — start a review session right now
-/reviewsize 7 — how many words per review session (or /reviewsize auto)
-/song name - artist — practice with a song, line by line
-/reminders 3 9h-22h — daily practice reminders (or /reminders off)
-/profile — your level, words and reminders
-/export — get an Excel spreadsheet with everything
-/delete word — remove a word
-/level B1-B2 — change your level (A1-A2, A2-B1, B1-B2, B2-C1, C1-C2 or C2)
-/cancel — stop what you were doing (nothing is deleted)
-/status — how things are going"""
-
 
 def sem_marcas(frase: str) -> str:
     """Tira os [[ ]] que marcam a palavra-alvo — no WhatsApp a frase vai limpa."""
     return frase.replace("[[", "").replace("]]", "")
-
-
-def _linha_de_opcoes(opcoes: Sequence[str]) -> str:
-    return "  ·  ".join(f"{_NUMEROS[i]} {texto}" for i, texto in enumerate(opcoes, start=1))
 
 
 def _lista_de_opcoes(opcoes: Sequence[str], *, primeira: int = 1) -> str:
@@ -167,19 +130,17 @@ def _lista_de_opcoes(opcoes: Sequence[str], *, primeira: int = 1) -> str:
 # ---- menu único (M9) -------------------------------------------------------------------------
 
 
-def convite(palavra: str, grupo: str | None = None) -> str:
-    if grupo is not None:
-        return f"Now, tag me with a sentence using *{palavra}*, or tag me with a number:"
-    return f"Now, you can write one or more sentences using *{palavra}*, or type:"
+def convite(palavra: str) -> str:
+    return f"Now, tag me with a sentence using *{palavra}*, or tag me with a number:"
 
 
-def menu_acoes(palavra: str, *, ja_viu_sinonimos: bool = False, grupo: str | None = None) -> str:
+def menu_acoes(palavra: str, *, ja_viu_sinonimos: bool = False) -> str:
     """O menu único de ações (M9). Desde o M25 (ADR-0026) não tem mais opção 1 (ouvir): o áudio
     virou automático, já mandado junto da explicação — por isso o menu começa no 2, sem renumerar
-    o que o aluno já decorou (`grupo` é o prefixo do grupo, M16; `None` no privado)."""
+    o que a turma já decorou."""
     sinonimos = "See more synonyms" if ja_viu_sinonimos else "Check synonyms"
     opcoes = ["See more examples", sinonimos, "Just save", "Don't save"]
-    return convite(palavra, grupo) + "\n" + _lista_de_opcoes(opcoes, primeira=2)
+    return convite(palavra) + "\n" + _lista_de_opcoes(opcoes, primeira=2)
 
 
 # ---- respostas dos fluxos ------------------------------------------------------------------
@@ -190,17 +151,17 @@ def _titulo(palavra: str, classe: str, cefr: str) -> str:
 
 
 def _outros_sentidos(
-    palavra: str, outros: Sequence[Sense | SentidoSalvo], grupo: str | None, pt: bool = True
+    palavra: str, outros: Sequence[Sense | SentidoSalvo], pt: bool = True
 ) -> list[str]:
-    """Os outros sentidos da palavra (no formato do `/info`) e como pedir um deles: a mesma
-    palavra com `|` e o sentido, no grupo marcando o bot (M31, M37). Vazio se a palavra tem um só."""
+    """Os outros sentidos da palavra e como pedir um deles: a mesma palavra com `|` e o sentido,
+    marcando o bot (M31, M37). Vazio se a palavra tem um só."""
     if not outros:
         return []
     pedido = f"*{palavra} | {outros[0].definicao}*"
     return [
         "",
         *((f"↔️ {o.traducao} — {o.definicao}" if pt else f"↔️ {o.definicao}") for o in outros),
-        f"Want another meaning? {'Tag me with' if grupo is not None else 'Send'} {pedido}",
+        f"Want another meaning? Tag me with {pedido}",
     ]
 
 
@@ -214,7 +175,6 @@ def explicacao(
     *,
     outros_sentidos: Sequence[Sense | SentidoSalvo] = (),
     ja_viu_sinonimos: bool = False,
-    grupo: str | None = None,
     pt: bool = True,
 ) -> str:
     linhas = [_titulo(palavra, classe, cefr)]
@@ -225,12 +185,8 @@ def explicacao(
         linhas.append(f"💡 {dica}")
     if exemplo:
         linhas.append(f'"{sem_marcas(exemplo)}"')
-    linhas += _outros_sentidos(palavra, outros_sentidos, grupo, pt)
-    return (
-        "\n".join(linhas)
-        + "\n\n"
-        + menu_acoes(palavra, ja_viu_sinonimos=ja_viu_sinonimos, grupo=grupo)
-    )
+    linhas += _outros_sentidos(palavra, outros_sentidos, pt)
+    return "\n".join(linhas) + "\n\n" + menu_acoes(palavra, ja_viu_sinonimos=ja_viu_sinonimos)
 
 
 def ja_existe(
@@ -241,13 +197,12 @@ def ja_existe(
     exemplo: str,
     *,
     outros_sentidos: Sequence[Sense | SentidoSalvo] = (),
-    grupo: str | None = None,
     pt: bool = True,
+    p: str = "!",
 ) -> str:
     """O aluno mandou uma palavra que já está na lista: avisa, mostra o que já tem e oferece só o
     que faz sentido (frase, exemplos, sinônimos) — salvar já não se aplica, e 0/skip abre caminho
     para outra palavra sem passar pela IA. O áudio (M25) já vai junto, automático, sem opção."""
-    p = grupo or ""
     linhas = [
         f"📌 You already have *{palavra}* in your list.",
         "",
@@ -257,12 +212,12 @@ def ja_existe(
     ]
     if exemplo:
         linhas.append(f'"{sem_marcas(exemplo)}"')
-    linhas += _outros_sentidos(palavra, outros_sentidos, grupo, pt)
+    linhas += _outros_sentidos(palavra, outros_sentidos, pt)
     opcoes = ["See more examples", "Check synonyms"]
     return (
         "\n".join(linhas)
         + "\n\n"
-        + convite(palavra, grupo)
+        + convite(palavra)
         + "\n"
         + _lista_de_opcoes(opcoes, primeira=2)
         + f"\n\nTo send another word or command, type {p}0 or {p}skip."
@@ -283,7 +238,6 @@ def avaliacao(
     palavra: str,
     *,
     ja_viu_sinonimos: bool = False,
-    grupo: str | None = None,
 ) -> str:
     cabecalho = _CABECALHO_VEREDITO[ev.veredito]
     if not ev.sentido_correto:
@@ -296,7 +250,7 @@ def avaliacao(
     linhas.append(f"💬 {ev.explicacao}")
     corpo = "\n".join(linhas)
     return f"{corpo}\n\nWant to try another sentence?\n" + menu_acoes(
-        palavra, ja_viu_sinonimos=ja_viu_sinonimos, grupo=grupo
+        palavra, ja_viu_sinonimos=ja_viu_sinonimos
     )
 
 
@@ -306,19 +260,16 @@ def exemplos(
     frases: Sequence[str],
     *,
     ja_viu_sinonimos: bool = False,
-    grupo: str | None = None,
 ) -> str:
     numeradas = "\n".join(f"{i}. {sem_marcas(f)}" for i, f in enumerate(frases, start=1))
     return (
         f"📝 *Examples with {palavra}* ({traducao})\n{numeradas}\n\n"
         "Want to try a sentence of your own?\n"
-        + menu_acoes(palavra, ja_viu_sinonimos=ja_viu_sinonimos, grupo=grupo)
+        + menu_acoes(palavra, ja_viu_sinonimos=ja_viu_sinonimos)
     )
 
 
-def sinonimos(
-    palavra: str, traducao: str, itens: Sequence[Synonym], *, grupo: str | None = None
-) -> str:
+def sinonimos(palavra: str, traducao: str, itens: Sequence[Synonym]) -> str:
     linhas: list[str] = []
     for s in itens:
         linhas.append(f"*{s.expressao}* = {s.significado}")
@@ -326,8 +277,7 @@ def sinonimos(
     corpo = "\n".join(linhas)
     return (
         f"🔄 *Synonyms for {palavra}* ({traducao})\n{corpo}\n\n"
-        f"Want to try a sentence with *{palavra}*?\n"
-        + menu_acoes(palavra, ja_viu_sinonimos=True, grupo=grupo)
+        f"Want to try a sentence with *{palavra}*?\n" + menu_acoes(palavra, ja_viu_sinonimos=True)
     )
 
 
@@ -339,17 +289,12 @@ def salvo(palavra: str, sugestoes: Sequence[Expansion] = (), *, p: str = "/") ->
     if sugestoes:
         itens = ", ".join(f"*{e.expressao}*" for e in sugestoes)
         linhas.append(f"You might like these too: {itens}.")
-    if p == "/":
-        linhas.append("Send me another word or expression whenever you want.")
-    else:  # no grupo, palavra nova entra marcando o bot (M37)
-        linhas.append("Add another one whenever you want: tag me with a word.")
+    linhas.append("Add another one whenever you want: tag me with a word.")  # M37
     return "\n".join(linhas)
 
 
-def resposta_livre(
-    resposta: str, palavra: str, *, ja_viu_sinonimos: bool = False, grupo: str | None = None
-) -> str:
-    return f"{resposta}\n\n" + menu_acoes(palavra, ja_viu_sinonimos=ja_viu_sinonimos, grupo=grupo)
+def resposta_livre(resposta: str, palavra: str, *, ja_viu_sinonimos: bool = False) -> str:
+    return f"{resposta}\n\n" + menu_acoes(palavra, ja_viu_sinonimos=ja_viu_sinonimos)
 
 
 def entrada_invalida(motivo: str | None) -> str:
@@ -378,21 +323,14 @@ def lista(
     total: int,
     numero: int,
     paginas: int,
-    p: str = "/",
-    grupo: bool = False,
+    p: str = "!",
     pt: bool = True,
 ) -> str:
-    """Uma página da lista, das mais novas para as mais antigas. Cada palavra leva o seu número
-    fixo (1 = a mais antiga), o mesmo que `/info`, `/practice` e `/delete` aceitam. No grupo
-    (M16) o título é da turma e a dica é de `!practice` (não há `!info` na turma)."""
+    """Uma página da lista da turma, das mais novas para as mais antigas. Cada palavra leva o seu
+    número fixo (1 = a mais antiga), o mesmo que `!practice` e `!delete` aceitam."""
     corpo = "\n".join(f"{n}. {_linha_de_entrada(e, pt)}" for n, e in pagina)
-    titulo = "The class's words" if grupo else "Your words"
-    dica = (
-        f"{p}practice {pagina[0][0]} to practice one"
-        if grupo
-        else f"{p}info {pagina[0][0]} for details"
-    )
-    texto = f"📚 *{titulo}* ({total}) — newest first\n{corpo}\n\n💡 {dica}"
+    dica = f"{p}practice {pagina[0][0]} to practice one"
+    texto = f"📚 *The class's words* ({total}) — newest first\n{corpo}\n\n💡 {dica}"
     if paginas > 1:
         proxima = f" — {p}list {numero + 1} for more" if numero < paginas else ""
         texto += f"\nPage {numero}/{paginas}{proxima}"
@@ -455,33 +393,6 @@ def _quando(momento: datetime, agora: datetime) -> str:
     return f"{dia} at {momento:%H:%M}"
 
 
-def perfil_do_aluno(
-    p: Profile,
-    *,
-    total: int,
-    praticadas: int,
-    para_revisar: int,
-    proximo: datetime | None = None,
-    agora: datetime | None = None,
-) -> str:
-    if p.lembretes_por_dia == 0:
-        lembretes = "off — turn them on with /reminders 3"
-    else:
-        vezes = "once" if p.lembretes_por_dia == 1 else f"{p.lembretes_por_dia}x"
-        lembretes = f"every day, {vezes} between {p.janela_inicio}h and {p.janela_fim}h"
-        if proximo is not None and agora is not None:
-            lembretes += f"\n⏭️ Next reminder: {_quando(proximo, agora)}"
-    tamanho = _tamanho_efetivo(p, total)
-    return (
-        "*Your profile* 👤\n"
-        f"🎯 Level: {p.nivel}\n"
-        f"📚 Words: {total} ({praticadas} practiced, {total - praticadas} pending)\n"
-        f"🔁 Due for review: {para_revisar}\n"
-        f"📏 Review session size: up to {tamanho} words\n"
-        f"⏰ Reminders: {lembretes}"
-    )
-
-
 def pronuncia(palavra: str, exemplo: str | None) -> str:
     """O texto que vai junto das notas de voz: o que o aluno está prestes a ouvir."""
     linhas = [f"🔊 *{palavra}*"]
@@ -490,9 +401,8 @@ def pronuncia(palavra: str, exemplo: str | None) -> str:
     return "\n".join(linhas)
 
 
-def palavra_nao_encontrada(palavra: str, p: str = "/", *, grupo: bool = False) -> str:
-    de_quem = "the class's words" if grupo else "your words"
-    return f'I couldn\'t find "{palavra}" in {de_quem}. Use {p}list to see what there is.'
+def palavra_nao_encontrada(palavra: str, p: str = "!") -> str:
+    return f"I couldn't find \"{palavra}\" in the class's words. Use {p}list to see what there is."
 
 
 def apagada(palavra: str) -> str:
@@ -521,46 +431,9 @@ def status(sessao_waha: str, total: int, pendentes_: int) -> str:
     )
 
 
-def _palavras(quantidade: int) -> str:
-    return "1 word" if quantidade == 1 else f"{quantidade} words"
-
-
-def exportacao(quantidade: int) -> str:
-    """Legenda do arquivo enviado direto pelo WhatsApp."""
-    return (
-        f"📊 Done! {_palavras(quantidade)} in the spreadsheet. "
-        "Tabs: *Words*, *Sentences* and *Synonyms*."
-    )
-
-
-def exportacao_com_link(link: str, quantidade: int) -> str:
-    """Plano B, quando o WhatsApp não aceitou o arquivo."""
-    return (
-        f"📊 Done! {_palavras(quantidade)} in the spreadsheet. I couldn't send the file here, "
-        f"so here's a link (valid for 24 h):\n{link}\n\n"
-        "Tabs: *Words*, *Sentences* and *Synonyms*."
-    )
-
-
 # ---- revisão espaçada e lembretes (seção 5.7, M10) ---------------------------------------------
 
 SEM_NADA_PARA_REVISAR = "No pending reviews right now. 🎉"
-DICA_DE_LEMBRETES = "\n\n💡 Want daily practice reminders? Send /reminders 3"
-LEMBRETES_INVALIDOS = (
-    "I couldn't understand that. Try /reminders 3 (3 times a day, 9h-21h) or "
-    "/reminders 3 9h-22h (your own window), or /reminders off."
-)
-
-
-def dica_de_lembretes(cmd: str = "/reminders") -> str:
-    return f"\n\n💡 Want daily practice reminders? Send {cmd} 3"
-
-
-def lembretes_invalidos(cmd: str = "/reminders") -> str:
-    return (
-        f"I couldn't understand that. Try {cmd} 3 (3 times a day, 9h-21h) or "
-        f"{cmd} 3 9h-22h (your own window), or {cmd} off."
-    )
 
 
 _QUALIDADE_EMOJI: dict[str, str] = {
@@ -576,19 +449,13 @@ def hora_da_pratica(total: int) -> str:
     return f"⏰ *Practice time* — {total} {palavra} to review."
 
 
-def card_de_revisao(indice: int, total: int, palavra: str, *, grupo: str | None = None) -> str:
-    """No grupo (M35) ninguém é marcado: qualquer um responde, e `skip` pula a palavra."""
-    if grupo is not None:
-        return (
-            f"🔁 {indice}/{total} · *{palavra}*\n"
-            "Explain it in English in your own words, or write a sentence using it "
-            "(tag me to answer).\n\n"
-            f"_Anyone can answer · tag me with skip for the next word · skipall to stop the review_"
-        )
+def card_de_revisao(indice: int, total: int, palavra: str) -> str:
+    """Ninguém é marcado (M35): qualquer um responde, e `skip` pula a palavra."""
     return (
         f"🔁 {indice}/{total} · *{palavra}*\n"
-        "Explain it in English in your own words, or write a sentence using it.\n\n"
-        "_Type 0 to leave the practice._"
+        "Explain it in English in your own words, or write a sentence using it "
+        "(tag me to answer).\n\n"
+        "_Anyone can answer · tag me with skip for the next word · skipall to stop the review_"
     )
 
 
@@ -604,7 +471,6 @@ def revisao_encerrada(
     lapsos: Sequence[str],
     *,
     puladas: Sequence[str] = (),
-    p: str = "/",
 ) -> str:
     if not feitas and not puladas:
         return SEM_NADA_PARA_REVISAR
@@ -616,180 +482,13 @@ def revisao_encerrada(
         linhas.append(f"🔁 Coming back soon: {', '.join(lapsos)}")
     if puladas:
         linhas.append(f"⏭️ Skipped: {', '.join(puladas)}")
-    if p == "/":
-        linhas.append("Send me a new word or expression whenever you want.")
-    else:  # no grupo, palavra nova entra marcando o bot (M37)
-        linhas.append("Add a new word whenever you want: tag me with a word.")
+    linhas.append("Add a new word whenever you want: tag me with a word.")  # M37
     return "\n".join(linhas)
-
-
-def _proximo(proximo: datetime | None, agora: datetime | None) -> str:
-    return f" Next one: {_quando(proximo, agora)}." if proximo and agora else ""
-
-
-def lembretes_atuais(
-    perfil: Profile,
-    proximo: datetime | None = None,
-    agora: datetime | None = None,
-    cmd: str = "/reminders",
-) -> str:
-    if perfil.lembretes_por_dia == 0:
-        return (
-            f"Reminders are off. Turn them on with {cmd} 3 (or {cmd} 3 9h-22h for your own window)."
-        )
-    vezes = "once a day" if perfil.lembretes_por_dia == 1 else f"{perfil.lembretes_por_dia}x a day"
-    return (
-        f"Reminders: {vezes}, between {perfil.janela_inicio}h and {perfil.janela_fim}h."
-        f"{_proximo(proximo, agora)} "
-        f"Change with {cmd} N or turn off with {cmd} off."
-    )
-
-
-def lembretes_alterados(
-    perfil: Profile, proximo: datetime | None = None, agora: datetime | None = None
-) -> str:
-    vezes = "once a day" if perfil.lembretes_por_dia == 1 else f"{perfil.lembretes_por_dia}x a day"
-    return (
-        f"✅ Reminders set: {vezes}, between {perfil.janela_inicio}h and {perfil.janela_fim}h."
-        f"{_proximo(proximo, agora)}"
-    )
-
-
-def lembretes_desligados() -> str:
-    return "✅ Reminders are off."
-
-
-def _tamanho_efetivo(perfil: Profile, total_palavras: int) -> int:
-    if perfil.tamanho_revisao is not None:
-        return perfil.tamanho_revisao
-    return min(total_palavras, TAMANHO_REVISAO_PADRAO)
-
-
-def tamanho_de_revisao_atual(perfil: Profile, total_palavras: int) -> str:
-    efetivo = _tamanho_efetivo(perfil, total_palavras)
-    if perfil.tamanho_revisao is None:
-        return (
-            f"Review sessions: up to {efetivo} words (automatic — the smaller of your word count "
-            "and 7). Set a fixed number with /reviewsize N."
-        )
-    return f"Review sessions: up to {efetivo} words (fixed). Send /reviewsize auto for automatic."
-
-
-def tamanho_de_revisao_alterado(tamanho: int) -> str:
-    return f"✅ Review sessions: up to {tamanho} words now."
-
-
-def tamanho_de_revisao_automatico() -> str:
-    return "✅ Review sessions: back to automatic (the smaller of your word count and 7)."
-
-
-def tamanho_de_revisao_invalido() -> str:
-    return "I couldn't understand that. Try /reviewsize 7 (a number from 1 to 20), or /reviewsize auto."
 
 
 # --- Prática com música (M13, seção 5.8) ---
 
-SONG_USO = (
-    "Tell me the song: /song paper plane — or add the artist to narrow it down: "
-    "/song paper plane - the inventors"
-)
-SONG_INDISPONIVEL = "Song practice isn't available here yet."
-SONG_BUSCA_FALHOU = "I couldn't reach the lyrics library right now. Try again in a bit?"
-SONG_SEM_VERSOS = "I found the song, but its lyrics are empty here. Try another one: /song name"
-SONG_DESCARTADAS = "OK, nothing saved. Send me a new word or /song whenever you want."
-SAIR_DA_PRATICA = "_Type 0 to leave the practice._"
-
-_COMPREENSAO_EMOJI = {"entendeu": "✅", "parcial": "🤔", "nao_entendeu": "❌"}
-
-
-def song_nao_encontrada(busca: str, fora_do_ingles: bool) -> str:
-    if fora_do_ingles:
-        return (
-            f"I found *{busca}*, but the lyrics aren't in English — and we can't practice "
-            "English with a song in another language. Send me another one: /song name"
-        )
-    return f"I couldn't find *{busca}*. Check the spelling, or add the artist: /song name - artist"
-
-
-def song_candidatas(opcoes: Sequence[OpcaoDeMusica], *, invalida: bool = False) -> str:
-    cabecalho = (
-        "Pick one of the numbers below." if invalida else "I found more than one. Which one is it?"
-    )
-    linhas = [cabecalho]
-    linhas += [f"{i}. *{o.titulo}* — {o.artista}" for i, o in enumerate(opcoes, start=1)]
-    linhas.append(
-        "Reply with the number, or 0 to cancel. Not here? Send the name with the artist: "
-        "paper plane - the inventors"
-    )
-    return "\n".join(linhas)
-
-
-def song_verso(indice: int, total: int, verso: str) -> str:
-    return (
-        f"🎵 Line {indice}/{total}\n"
-        f"_{verso}_\n"
-        "What does it mean? Explain in English or Portuguese.\n"
-        f"{SAIR_DA_PRATICA}"
-    )
-
-
-def song_inicio(titulo: str, artista: str, total: int, verso: str) -> str:
-    linhas = "line" if total == 1 else "lines"
-    return (
-        f"🎶 *{titulo}* — {artista}\n"
-        f"Let's go line by line ({total} {linhas}, repeated ones skipped): tell me what each "
-        "line means, and I'll give you feedback.\n\n" + song_verso(1, total, verso)
-    )
-
-
-def feedback_de_verso(linha: LinhaDaMusica) -> str:
-    partes = [f"{_COMPREENSAO_EMOJI[linha.compreensao]} {linha.feedback}"]
-    if linha.significado:
-        partes.append(f"💬 {linha.significado}")
-    return "\n".join(partes)
-
-
-def song_resumo(titulo: str, feitas: int, total: int, expressoes: Sequence[str]) -> str:
-    linhas = [f"🎉 *{titulo}* — you went through {feitas} of {total} lines."]
-    if not expressoes:
-        linhas.append("Send me a new word, or /song for another one, whenever you want.")
-        return "\n".join(linhas)
-    linhas.append("Words and expressions you may want to keep:")
-    linhas += [f"{i}. {e}" for i, e in enumerate(expressoes, start=1)]
-    linhas.append(
-        "Want me to save them in your dictionary? Reply with the numbers (e.g. 1 3), *all*, "
-        "or 0 to skip."
-    )
-    return "\n".join(linhas)
-
-
-def song_numeros_invalidos(expressoes: Sequence[str]) -> str:
-    linhas = ["Pick numbers from the list:"]
-    linhas += [f"{i}. {e}" for i, e in enumerate(expressoes, start=1)]
-    linhas.append("Reply with the numbers (e.g. 1 3), *all*, or 0 to skip.")
-    return "\n".join(linhas)
-
-
-def song_salvas(palavras: Sequence[str]) -> str:
-    if not palavras:
-        return "I couldn't save those, sorry. Send me any of them as a new word to try again."
-    return (
-        f"✅ Saved to your dictionary: {', '.join(palavras)}. They're in /pending — practice "
-        "them whenever you want."
-    )
-
-
 # --- Controle de acesso (M15, ADR-0018) -------------------------------------------------------
-
-
-def sem_plano(email: str) -> str:
-    """Para quem não está na lista e escreve no privado (no máximo uma vez a cada 7 dias)."""
-    return (
-        "You don't have a plan with this bot yet. To use it, email "
-        f"{email} asking for access.\n"
-        f"🇧🇷 Você não possui um plano com o nosso bot. Para usá-lo, contate {email} "
-        "solicitando acesso."
-    )
 
 
 def grupo_ativado(p: str = "!") -> str:
@@ -800,6 +499,8 @@ def grupo_ativado(p: str = "!") -> str:
 
 
 GRUPO_ATIVADO = grupo_ativado()
+
+
 GRUPO_JA_ATIVO = "I'm already active in this group. 🙂"
 
 
@@ -828,6 +529,8 @@ def admin_adicionado(p: str = "!") -> str:
 
 
 ADMIN_ADICIONADO = admin_adicionado()
+
+
 ADMIN_REMOVIDO = "✅ Removed. Groups they already activated stay active."
 
 
@@ -841,7 +544,6 @@ def admin_lista(numeros: Sequence[str]) -> str:
 # --- /ranking (M58, ADR-0056) -------------------------------------------------------------------
 
 RANKING_USO = "Use /ranking for the last 6 months, or /ranking 3 for the last 3 months (1 to 24)."
-_MEDALHAS = {1: "🥇", 2: "🥈", 3: "🥉"}
 
 
 def _periodo(meses: int) -> str:
@@ -850,10 +552,6 @@ def _periodo(meses: int) -> str:
 
 def ranking_vazio(meses: int) -> str:
     return f"📊 No daily or weekly answers in the {_periodo(meses)} yet."
-
-
-def _posicao(i: int) -> str:
-    return _MEDALHAS.get(i, f"{i}.")
 
 
 def ranking_legenda(meses: int) -> str:
@@ -933,6 +631,19 @@ def grupos(
 
 
 # --- Grupo (M16, ADR-0019) ---------------------------------------------------------------------
+
+
+def ajuda_do_admin(p: str = "!") -> str:
+    """O privado é só dos comandos de admin (ADR-0062): qualquer outro texto do dono ou de um admin
+    recebe esta lista, sem IA. Quem não é admin não recebe nada."""
+    return (
+        f"*Admin commands* 🛠️ (start with / or {p})\n"
+        "/groups — active and pending groups (/groups off 1 turns one off)\n"
+        "/teachers — the teachers (/teachers 5531999998888 adds or removes one)\n"
+        "/ranking [months] — the most engaged students and classes, as a PDF\n"
+        "/admin — the bot's admins (owner only)\n\n"
+        f"In a group: {p}activate [name] and {p}deactivate. Studying happens in the groups."
+    )
 
 
 def ajuda_do_grupo(p: str = "!") -> str:
@@ -1061,13 +772,12 @@ def revisao_inativa(
     lapsos: Sequence[str],
     *,
     puladas: Sequence[str] = (),
-    p: str = "!",
 ) -> str:
     """A rodada fechou porque o grupo ficou 3 horas sem mensagem."""
     corpo = "😴 Nobody replied for a while, so I closed this review."
     if not feitas and not puladas:
         return corpo + " I'll be back later."
-    return corpo + "\n" + revisao_encerrada(feitas, lapsos, puladas=puladas, p=p)
+    return corpo + "\n" + revisao_encerrada(feitas, lapsos, puladas=puladas)
 
 
 # --- Configuração da revisão diária (M35, ADR-0033) -------------------------------------------

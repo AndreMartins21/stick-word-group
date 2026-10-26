@@ -22,9 +22,7 @@ async def gerar(d: Deps, sessao: Sessao, perfil: Profile, n: int = NUMERO_DE_SIN
             n,
             sessao.sinonimos_mostrados,
         )
-    await d.conversa.enviar(
-        messages.sinonimos(entrada.palavra, d.rotulo(entrada.sentido), itens, grupo=d.grupo_prefixo)
-    )
+    await d.conversa.enviar(messages.sinonimos(entrada.palavra, d.rotulo(entrada.sentido), itens))
     # M12: guarda na entrada (sem repetir por expressão) para o /info e o export.
     ja_salvos = {s.expressao.casefold() for s in entrada.sinonimos}
     novos = [s for s in itens if s.expressao.casefold() not in ja_salvos]

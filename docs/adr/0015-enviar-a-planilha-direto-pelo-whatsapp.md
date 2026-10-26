@@ -1,6 +1,6 @@
 # ADR-0015: Enviar a planilha direto pelo WhatsApp, com o link do bucket só como plano B
 
-- **Status:** Aceito
+- **Status:** Substituído por ADR-0062
 - **Data:** 2026-09-24
 
 ## Contexto

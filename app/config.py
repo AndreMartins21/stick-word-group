@@ -20,7 +20,6 @@ from app.services.limites import Limites
 NivelUsuario = Literal["A1-A2", "A2-B1", "B1-B2", "B2-C1", "C1-C2", "C2"]
 ProvedorLLM = Literal["vertex_gemini", "anthropic"]
 AmbienteApp = Literal["local", "prod"]
-CONTATO_PADRAO = "smartins.bot@gmail.com"
 _NUMERICOS = {
     "max_groups",
     "limite_por_sessao_grupo",
@@ -48,18 +47,16 @@ class Settings(BaseSettings):
     app_env: AmbienteApp = "local"
     log_level: str = "INFO"
 
-    # Usuários / canal (M14, ADR-0017). `ALLOWED_NUMBER` (um só) continua aceito e entra na lista.
-    # Listas como texto separado por vírgula (o pydantic-settings leria lista como JSON).
+    # O dono do bot (M14): `OWNER_NUMBER` ou, legado, `ALLOWED_NUMBER`. No privado só o dono e os
+    # admins são atendidos, e só com os comandos de admin (ADR-0062). Grupos fixos como texto
+    # separado por vírgula (o pydantic-settings leria lista como JSON).
     allowed_number: str = ""
-    allowed_numbers: str = ""
     allowed_groups: str = ""
-    owner_number: str | None = None  # o dono do bot; padrão = o primeiro número permitido
-    # Controle de acesso (M15, ADR-0018): teto de grupos ativados por comando e o contato que o
-    # aviso "você não tem um plano" mostra.
+    owner_number: str | None = None
+    # Controle de acesso (M15, ADR-0018): teto de grupos ativados por comando.
     max_groups: int = Field(default=10, ge=0)
-    contact_email: str = CONTATO_PADRAO
-    # Em grupo o bot só reage a mensagens que começam com isto (M16, ADR-0019). Não pode ser a barra
-    # (o prefixo do privado), letra ou número (colidiria com o texto normal).
+    # Em grupo o bot só reage a mensagens que começam com isto ou com `/` (M16, ADR-0019). Não pode
+    # ser a barra, letra ou número (colidiria com o texto normal).
     group_prefix: str = "!"
     # Revisão em grupo (M17, ADR-0020): palavras por rodada e quanto esperar a pessoa marcada.
     limite_por_sessao_grupo: int = Field(default=5, ge=1)
@@ -87,7 +84,7 @@ class Settings(BaseSettings):
     max_processamentos: int = Field(default=4, ge=1)
     bot_number: str
     user_level: NivelUsuario = "B1-B2"
-    # Fuso do aluno, para distribuir os lembretes de revisão espaçada (seção 5.7, M10).
+    # Fuso das turmas: horário da revisão diária e do desafio semanal (seção 5.2b).
     timezone: str = "America/Sao_Paulo"
 
     # WAHA (gateway WhatsApp)
@@ -114,16 +111,10 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = None
     anthropic_model: str = "claude-haiku-4-5-20251001"
 
-    # Storage
-    export_bucket: str
-
     # Pronúncia em áudio (M23, ADR-0024): Google Cloud TTS + cache num bucket próprio, permanente.
-    # Sem `AUDIO_BUCKET` o bot sobe normalmente e só a opção "Hear how it sounds" avisa que falhou.
+    # Sem `AUDIO_BUCKET` o bot sobe normalmente, só sem os áudios.
     audio_bucket: str | None = None
     tts_voice: str = "en-US-Neural2-F"
-
-    # Letras de música do /song (M13, seção 5.8, ADR-0016): API pública do LRCLIB, sem chave.
-    lyrics_url: str = "https://lrclib.net"
 
     # Snapshot diário de métricas (M28, ADR-0029): sem `METRICS_BUCKET` o bot sobe normalmente e
     # o Agendador simplesmente não roda o snapshot (nenhum destino configurado).
@@ -179,17 +170,10 @@ class Settings(BaseSettings):
             raise ValueError("GROUP_PREFIX: 1 ou 2 símbolos, sem letras, números nem a barra")
         return valor
 
-    @field_validator("contact_email", mode="before")
-    @classmethod
-    def _contato_vazio_usa_o_padrao(cls, valor: object) -> object:
-        if isinstance(valor, str) and not valor.strip():
-            return CONTATO_PADRAO
-        return valor
-
     @model_validator(mode="after")
-    def _ao_menos_um_numero(self) -> Self:
-        if not self.numeros_permitidos:
-            raise ValueError("defina ALLOWED_NUMBERS (ou ALLOWED_NUMBER) com ao menos um número")
+    def _dono_definido(self) -> Self:
+        if not self.dono:
+            raise ValueError("defina OWNER_NUMBER (ou ALLOWED_NUMBER) com o número do dono")
         return self
 
     @model_validator(mode="after")
@@ -201,23 +185,12 @@ class Settings(BaseSettings):
         return self
 
     @property
-    def numeros_permitidos(self) -> list[str]:
-        """Só dígitos, sem repetir. O `ALLOWED_NUMBER` legado vem primeiro: ele é o número que já
-        usava o bot (o dono), e o dono padrão é o primeiro da lista."""
-        vistos: dict[str, None] = {}
-        for bruto in (self.allowed_number, *self.allowed_numbers.split(",")):
-            digitos = re.sub(r"\D", "", bruto)
-            if digitos:
-                vistos.setdefault(digitos)
-        return list(vistos)
-
-    @property
     def grupos_permitidos(self) -> list[str]:
         return [g.strip() for g in self.allowed_groups.split(",") if g.strip()]
 
     @property
     def dono(self) -> str:
-        return re.sub(r"\D", "", self.owner_number or "") or self.numeros_permitidos[0]
+        return re.sub(r"\D", "", self.owner_number or "") or re.sub(r"\D", "", self.allowed_number)
 
     @property
     def limites(self) -> Limites:

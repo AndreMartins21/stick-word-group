@@ -14,21 +14,20 @@ from app.domain.models import (
     Evaluation,
     Expansion,
     Explanation,
+    NivelUsuario,
     Sense,
 )
 from app.domain.rodizio import Candidato
 from app.flows.base import Autor, ConfigGrupo, Participantes
-from app.flows.commands import Exportador, StatusDaSessao
 from app.flows.conversa import Conversa
 from app.flows.router import Router
 from app.repo.base import Repository
 from app.repo.memory import MemoryBanco
 from app.services.audio import ServicoAudio
 from app.services.fake_llm import FakeTutor
-from app.services.letras import LyricsProvider
 
-CHAT = "5531999998888@c.us"
 GRUPO = "120363000000000001@g.us"
+CHAT = GRUPO  # ADR-0062: o bot só conversa em grupo
 DONO_NUMERO = "5531990000001"
 ANA = Autor("5531999998888", "Ana")
 BIA = Autor("5511988887777", "Bia")
@@ -106,9 +105,11 @@ class Montagem:
     esperas: list[float] = field(default_factory=list)
 
     async def diz(self, texto: str) -> list[str]:
-        """Manda `texto` como o aluno e devolve o que o bot respondeu (só os textos)."""
+        """Manda `texto` como a aluna `ANA` no grupo `CHAT`: um comando (`!`/`/`) vai como
+        comando; o resto, marcando o bot (M37). Devolve o que o bot respondeu (só os textos)."""
         antes = len(self.channel.textos_enviados)
-        await self.router.processar(texto, CHAT)
+        comando = texto.strip()[:1] in {"!", "/"}
+        await self.router.processar(texto, CHAT, ANA, marcado=not comando)
         return [t for _, t in self.channel.textos_enviados[antes:]]
 
     async def diz_no_grupo(self, autor: Autor, texto: str, *, chat: str = GRUPO) -> list[str]:
@@ -129,9 +130,6 @@ class Montagem:
 def montar(
     *,
     tutor: FakeTutor | None = None,
-    exportador: Exportador | None = None,
-    status_da_sessao: StatusDaSessao | None = None,
-    letras: LyricsProvider | None = None,
     audio: ServicoAudio | None = None,
     prefixo_do_grupo: str = "!",
     grupo_limite: int = 5,
@@ -140,6 +138,7 @@ def montar(
     sortear: Callable[[Sequence[Candidato]], Candidato] | None = None,
     participantes: Participantes | None = None,
     admins: tuple[str, ...] = (),
+    nivel_padrao: NivelUsuario = "B1-B2",
 ) -> Montagem:
     channel = FakeChannel()
     banco = MemoryBanco()
@@ -157,11 +156,8 @@ def montar(
         banco=banco,
         tutor=tutor,
         criar_conversa=criar_conversa,
-        nivel_padrao="B1-B2",
+        nivel_padrao=nivel_padrao,
         agora=relogio.agora,
-        status_da_sessao=status_da_sessao,
-        exportador=exportador,
-        letras=letras,
         audio=audio,
         prefixo_do_grupo=prefixo_do_grupo,
         eh_dono=lambda numero: numero == DONO_NUMERO,

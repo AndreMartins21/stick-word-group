@@ -1,9 +1,11 @@
-"""Roteador: recebe o texto do aluno, decide (máquina de estados pura, ADR-0004/ADR-0009),
+"""Roteador: recebe o texto de um grupo, decide (máquina de estados pura, ADR-0004/ADR-0009),
 executa a ação com os fluxos e guarda a sessão.
 
-Multiusuário (ADR-0017): cada chat é um espaço, com o próprio caderno (`Banco.do_espaco`), a
-própria `Conversa` (e o limite de 3 mensagens seguidas) e a própria trava. Duas mensagens do mesmo
-chat andam uma por vez; chats diferentes andam em paralelo."""
+Só grupos (ADR-0062): um chat que não termina em `@g.us` nunca chega aqui (o webhook só deixa o
+privado falar com os comandos de admin) e, se chegar, é ignorado sem tocar no banco nem na IA.
+Cada grupo é um espaço (ADR-0017), com o próprio caderno (`Banco.do_espaco`), a própria `Conversa`
+(e o limite de 3 mensagens seguidas) e a própria trava. Duas mensagens do mesmo grupo andam uma
+por vez; grupos diferentes andam em paralelo."""
 
 from __future__ import annotations
 
@@ -28,23 +30,19 @@ from app.domain.models import (
 from app.domain.state import Acao, Transicao, expirou, transicionar
 from app.flows import (
     capture,
-    commands,
     freeform,
     grupo,
     practice,
     review,
     semanal,
-    song,
     synonyms,
 )
 from app.flows.base import FUSO_PADRAO, Autor, ConfigGrupo, Deps, bloq
-from app.flows.commands import Exportador, StatusDaSessao
 from app.flows.conversa import Conversa
 from app.logging_config import id_curto, registrar_evento
 from app.repo.base import Banco
 from app.services import custo
 from app.services.audio import ServicoAudio
-from app.services.letras import LyricsProvider
 from app.services.limites import Decisao, LimitadorDeUso, Limites
 from app.services.llm import LLMError, Tutor
 from app.services.orcamento import Orcamento
@@ -73,10 +71,7 @@ class Router:
         criar_conversa: Callable[[str], Conversa],
         nivel_padrao: NivelUsuario,
         agora: Callable[[], datetime] = agora_utc,
-        status_da_sessao: StatusDaSessao | None = None,
-        exportador: Exportador | None = None,
         fuso: ZoneInfo = FUSO_PADRAO,
-        letras: LyricsProvider | None = None,
         audio: ServicoAudio | None = None,
         prefixo_do_grupo: str = "!",
         max_caracteres: int = MAX_CARACTERES_PADRAO,
@@ -93,7 +88,6 @@ class Router:
         self._criar_conversa = criar_conversa
         self._agora = agora
         self._fuso = fuso
-        self._letras = letras
         self._audio = audio
         self._prefixo_do_grupo = prefixo_do_grupo
         self._max_caracteres = max_caracteres
@@ -111,8 +105,6 @@ class Router:
         self._eh_admin = eh_admin
         self._config_grupo = config_grupo or ConfigGrupo()
         self._nivel_padrao = nivel_padrao
-        self._status_da_sessao = status_da_sessao
-        self._exportador = exportador
         self._conversas: dict[str, Conversa] = {}
         # O webhook pode chegar em duas mensagens seguidas do mesmo chat: uma por vez.
         self._travas: dict[str, asyncio.Lock] = {}
@@ -132,9 +124,8 @@ class Router:
             conversa=self.conversa_do(chat_id),
             agora=self._agora,
             fuso=self._fuso,
-            letras=self._letras,
             audio=self._audio,
-            grupo_prefixo=self._prefixo_do_grupo if chat_id.endswith("@g.us") else None,
+            grupo_prefixo=self._prefixo_do_grupo,
             autor=autor,
             chat_id=chat_id,
             grupo_cfg=self._config_grupo,
@@ -240,10 +231,10 @@ class Router:
         marcado: bool = False,
         admitida: bool = False,
     ) -> None:
-        """`chat_id` é o espaço E o destino das respostas: o chat de onde a mensagem veio. Em
-        grupo (M16) `autor` é quem escreveu e `texto` vem COM o prefixo (`!` ou `/`, um comando)
-        ou, com `marcado` (M37, ADR-0035), sem a marcação do bot (conversa com ele). Sem uma coisa
-        nem outra é conversa entre pessoas e nada acontece."""
+        """`chat_id` é o grupo (o espaço) E o destino das respostas. `autor` é quem escreveu e
+        `texto` vem COM o prefixo (`!` ou `/`, um comando) ou, com `marcado` (M37, ADR-0035), sem
+        a marcação do bot (conversa com ele). Sem uma coisa nem outra é conversa entre pessoas e
+        nada acontece; um chat que não é grupo também não (ADR-0062)."""
         if not admitida and not self._eh_para_o_bot(texto, chat_id, autor, marcado):
             return
         if self._na_fila.get(chat_id, 0) >= self._max_fila_por_chat:
@@ -268,17 +259,15 @@ class Router:
     ) -> None:
         async with self._trava(chat_id), self._vagas, _custo_no_espaco(chat_id):
             d = self._deps(chat_id, autor)
-            de_grupo: tuple[Autor, str, bool] | None = None
-            if d.em_grupo:
-                if autor is None:
-                    return
-                resto = grupo.sem_prefixo(texto, d.p)
-                if resto is not None:
-                    de_grupo = (autor, resto, False)
-                elif marcado:
-                    de_grupo = (autor, texto.strip(), True)
-                else:
-                    return
+            if autor is None:
+                return
+            resto = grupo.sem_prefixo(texto, d.p)
+            if resto is not None:
+                de_grupo = (autor, resto, False)
+            elif marcado:
+                de_grupo = (autor, texto.strip(), True)
+            else:
+                return
             d.conversa.usuario_falou()
             if len(texto.strip()) > self._max_caracteres:
                 # M40 (ADR-0038): recusa antes de tocar no banco ou na IA; a sessão fica como estava.
@@ -288,19 +277,13 @@ class Router:
             d = self._com_idioma(d, perfil)
             if (
                 perfil.chat_id != chat_id
-                or perfil.lembrete_sem_resposta
-                or (d.em_grupo and (perfil.revisoes_sem_resposta or perfil.proxima_diaria is None))
+                or perfil.revisoes_sem_resposta
+                or perfil.proxima_diaria is None
             ):
-                # M10: guarda o destino real (para o agendador saber para onde mandar os
-                # lembretes) e limpa o backoff — o aluno acabou de falar. No grupo (M35) isso
-                # também zera as revisões seguidas sem resposta e reescreve o espelho do tick.
-                perfil = perfil.model_copy(
-                    update={
-                        "chat_id": chat_id,
-                        "lembrete_sem_resposta": False,
-                        "revisoes_sem_resposta": 0,
-                    }
-                )
+                # M10: guarda o destino real (para o agendador saber para onde mandar a revisão
+                # diária e o desafio semanal); M35: zera as revisões seguidas sem resposta (o grupo
+                # acabou de falar) e reescreve o espelho do tick.
+                perfil = perfil.model_copy(update={"chat_id": chat_id, "revisoes_sem_resposta": 0})
                 await bloq(d.repo.salvar_perfil, perfil)
             sessao = await bloq(d.repo.obter_sessao)
             if sessao.estado != Estado.IDLE and expirou(sessao.atualizado_em, d.agora()):
@@ -308,29 +291,17 @@ class Router:
                 sessao = d.sessao_vazia()
 
             try:
-                if de_grupo is not None:
-                    nova = await grupo.tratar(
-                        d,
-                        sessao,
-                        perfil,
-                        de_grupo[1],
-                        autor=de_grupo[0],
-                        conversar=self._conversar,
-                        eh_dono=self._eh_dono,
-                        eh_admin=self._eh_admin,
-                        marcado=de_grupo[2],
-                    )
-                elif self._como_comando(texto).startswith("/"):
-                    nova = await commands.executar(
-                        d,
-                        sessao,
-                        perfil,
-                        self._como_comando(texto),
-                        status_da_sessao=self._status_da_sessao,
-                        exportador=self._exportador,
-                    )
-                else:
-                    nova = await self._conversar(d, sessao, perfil, texto)
+                nova = await grupo.tratar(
+                    d,
+                    sessao,
+                    perfil,
+                    de_grupo[1],
+                    autor=de_grupo[0],
+                    conversar=self._conversar,
+                    eh_dono=self._eh_dono,
+                    eh_admin=self._eh_admin,
+                    marcado=de_grupo[2],
+                )
             except LLMError:
                 logger.warning("falha da IA; sessão mantida como estava", exc_info=True)
                 await d.conversa.enviar(messages.ERRO_IA)
@@ -339,9 +310,10 @@ class Router:
             await bloq(d.repo.salvar_sessao, self._com_prazo(d, nova))
 
     def _eh_para_o_bot(self, texto: str, chat_id: str, autor: Autor | None, marcado: bool) -> bool:
-        """Em grupo, conversa entre pessoas não é do bot: nem gasta o limite nem recebe aviso."""
+        """Conversa entre pessoas não é do bot: nem gasta o limite nem recebe aviso. Um chat que
+        não é grupo nunca é (ADR-0062)."""
         if not chat_id.endswith("@g.us"):
-            return True
+            return False
         return autor is not None and (
             marcado or grupo.sem_prefixo(texto, self._prefixo_do_grupo) is not None
         )
@@ -350,33 +322,19 @@ class Router:
     def _com_prazo(d: Deps, sessao: Sessao) -> Sessao:
         """Todo ato no grupo adia o fechamento por inatividade da rodada em andamento (M35)."""
         atualizacoes: dict[str, object] = {"atualizado_em": d.agora()}
-        if d.em_grupo and Estado(sessao.estado) in (Estado.REVIEWING, Estado.WEEKLY_QUIZ):
+        if Estado(sessao.estado) in (Estado.REVIEWING, Estado.WEEKLY_QUIZ):
             atualizacoes["marcacao_expira_em"] = d.agora() + d.grupo_cfg.timeout
         return sessao.model_copy(update=atualizacoes)
 
     @staticmethod
     def _com_idioma(d: Deps, perfil: Profile) -> Deps:
-        """M34 (ADR-0032): grupo de B1-B2 para cima não vê português; o privado nunca muda."""
-        return replace(d, so_ingles=d.em_grupo and nivel_so_ingles(perfil.nivel))
-
-    def _como_comando(self, texto: str) -> str:
-        """No privado, o prefixo do grupo (`!`) é um apelido escondido da barra: `!list` vale
-        `/list`. Só vale se uma letra vem logo depois; `!!!` ou `!1` seguem como texto."""
-        limpo = texto.strip()
-        p = self._prefixo_do_grupo
-        if limpo.startswith(p) and len(limpo) > len(p) and limpo[len(p)].isalpha():
-            return "/" + limpo[len(p) :]
-        return limpo
+        """M34 (ADR-0032): grupo de B1-B2 para cima não vê português."""
+        return replace(d, so_ingles=nivel_so_ingles(perfil.nivel))
 
     def _perfil(self, d: Deps) -> Profile:
-        # M28: só no privado — em grupo, `d.autor` é quem escreveu a mensagem, não o espaço.
-        nome = d.autor.nome if (d.autor is not None and not d.em_grupo) else None
         perfil = d.repo.obter_perfil()
         if perfil is None:
-            perfil = Profile(nivel=self._nivel_padrao, criado_em=d.agora(), nome=nome)
-            d.repo.salvar_perfil(perfil)
-        elif nome and perfil.nome != nome:
-            perfil = perfil.model_copy(update={"nome": nome})
+            perfil = Profile(nivel=self._nivel_padrao, criado_em=d.agora())
             d.repo.salvar_perfil(perfil)
         return perfil
 
@@ -408,20 +366,6 @@ class Router:
                 return await review.responder(d, sessao, perfil, str(argumento))
             case Acao.ENCERRAR_REVISAO:
                 return await review.encerrar(d, sessao)
-            case Acao.BUSCAR_MUSICA:
-                return await song.buscar(d, sessao, str(argumento))
-            case Acao.ESCOLHER_MUSICA:
-                return await song.escolher(d, sessao, str(argumento))
-            case Acao.CANCELAR_MUSICA:
-                return await song.cancelar(d)
-            case Acao.RESPONDER_VERSO:
-                return await song.responder(d, sessao, perfil, str(argumento))
-            case Acao.ENCERRAR_MUSICA:
-                return await song.encerrar(d, sessao)
-            case Acao.SALVAR_EXPRESSOES:
-                return await song.salvar(d, sessao, perfil, str(argumento))
-            case Acao.DESCARTAR_EXPRESSOES:
-                return await song.descartar(d)
             case Acao.RESPONDER_PERGUNTA:
                 return await semanal.responder(d, sessao, perfil, str(argumento))
             case Acao.EXPLICAR_PERGUNTA:

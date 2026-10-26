@@ -1,5 +1,6 @@
-"""M15 (ADR-0018) no webhook: quem não tem plano só recebe o aviso (e a IA nunca é chamada), grupo
-só é ativado por admin, e o grupo não ativado fica pendente em silêncio."""
+"""M15 (ADR-0018) e ADR-0062 no webhook: no privado só o dono e os admins são atendidos, só com os
+comandos de admin (os demais são ignorados em silêncio e a IA nunca é chamada); grupo só é ativado
+por admin, e o grupo não ativado fica pendente em silêncio."""
 
 from __future__ import annotations
 
@@ -22,87 +23,33 @@ from tests.webhook_helpers import (
     _privada,
 )
 
-# --- privado: número sem plano ---------------------------------------------------------------
+# --- privado: só o dono e os admins, só com os comandos de admin (ADR-0062) -------------------
 
 
-def test_estranho_recebe_o_aviso_e_a_ia_nunca_e_chamada(ambiente: Ambiente) -> None:
-    resposta = ambiente.cliente.post("/waha/webhook", json=_privada(ESTRANHO, "stall"))
+@pytest.mark.parametrize("numero", [ESTRANHO, ALUNO_COMUM])
+@pytest.mark.parametrize("texto", ["stall", "oi", "/list", "/groups", "/admin add 5541966665555"])
+def test_quem_nao_e_admin_e_ignorado_em_silencio_no_privado(
+    ambiente: Ambiente, numero: str, texto: str
+) -> None:
+    resposta = ambiente.cliente.post("/waha/webhook", json=_privada(numero, texto))
 
     assert resposta.status_code == 200
-    assert ambiente.canal.textos_enviados == [
-        (f"{ESTRANHO}@c.us", messages.sem_plano(ambiente.settings.contact_email))
-    ]
-    assert ambiente.tutor.chamadas == []
+    assert ambiente.canal.textos_enviados == []
     assert ambiente.canal.vistos == []  # sem sendSeen
-    assert ambiente.banco.do_espaco(f"{ESTRANHO}@c.us").obter_perfil() is None  # nada gravado
+    assert ambiente.tutor.chamadas == []  # a IA nunca é chamada
+    assert ambiente.banco.do_espaco(f"{numero}@c.us").obter_perfil() is None  # nada gravado
+    assert ambiente.banco._processadas == set()  # nem a deduplicação
+    assert ambiente.banco.listar_admins() == [ADMIN]
 
 
-def test_o_aviso_mostra_o_email_e_a_linha_em_portugues(ambiente: Ambiente) -> None:
-    ambiente.cliente.post("/waha/webhook", json=_privada(ESTRANHO, "oi"))
-
-    (_, texto) = ambiente.canal.textos_enviados[0]
-    assert "smartins.bot@gmail.com" in texto
-    assert "🇧🇷 Você não possui um plano com o nosso bot" in texto
-
-
-def test_o_aviso_vai_no_maximo_uma_vez_e_o_resto_e_silencio(ambiente: Ambiente) -> None:
-    for texto in ("oi", "stall", "/list", "/admin add 5541966665555"):
-        ambiente.cliente.post("/waha/webhook", json=_privada(ESTRANHO, texto))
-
-    assert len(ambiente.canal.textos_enviados) == 1
-    assert ambiente.tutor.chamadas == []
-    assert ambiente.banco.listar_admins() == [ADMIN]  # o comando dele não fez nada
-
-
-def test_cada_estranho_recebe_o_proprio_aviso(ambiente: Ambiente) -> None:
-    ambiente.cliente.post("/waha/webhook", json=_privada(ESTRANHO, "oi"))
-    ambiente.cliente.post("/waha/webhook", json=_privada("5541955554444", "oi"))
-
-    assert [c for c, _ in ambiente.canal.textos_enviados] == [
-        f"{ESTRANHO}@c.us",
-        "5541955554444@c.us",
-    ]
-
-
-def test_midia_de_estranho_tambem_so_recebe_o_aviso(ambiente: Ambiente) -> None:
+def test_midia_de_quem_nao_e_admin_tambem_e_ignorada(ambiente: Ambiente) -> None:
     ambiente.cliente.post("/waha/webhook", json=_privada(ESTRANHO, "", midia=True))
 
-    assert [t for _, t in ambiente.canal.textos_enviados] == [
-        messages.sem_plano(ambiente.settings.contact_email)
-    ]
-
-
-def test_mensagem_vazia_de_estranho_e_ignorada_sem_gastar_o_aviso(ambiente: Ambiente) -> None:
-    ambiente.cliente.post("/waha/webhook", json=_privada(ESTRANHO, "   "))
     assert ambiente.canal.textos_enviados == []
-
-    ambiente.cliente.post("/waha/webhook", json=_privada(ESTRANHO, "oi"))
-    assert len(ambiente.canal.textos_enviados) == 1
+    assert ambiente.tutor.chamadas == []
 
 
-def test_a_marca_do_aviso_nao_guarda_o_telefone_em_claro(ambiente: Ambiente) -> None:
-    ambiente.cliente.post("/waha/webhook", json=_privada(ESTRANHO, "oi"))
-
-    marcas = [m for m in ambiente.banco._processadas if m.startswith("aviso_")]
-    assert len(marcas) == 1
-    assert ESTRANHO not in marcas[0]
-
-
-def test_aluno_e_dono_continuam_sendo_atendidos_normalmente(ambiente: Ambiente) -> None:
-    ambiente.cliente.post("/waha/webhook", json=_privada(ALUNO_COMUM, "stall"))
-    ambiente.cliente.post("/waha/webhook", json=_privada(DONO, "stall"))
-
-    assert [c for c, _ in ambiente.canal.textos_enviados] == [
-        f"{ALUNO_COMUM}@c.us",
-        f"{DONO}@c.us",
-    ]
-    assert len(ambiente.tutor.chamadas) == 2
-
-
-# --- privado: admin e dono -------------------------------------------------------------------
-
-
-def test_admin_que_nao_e_aluno_usa_groups_sem_chamar_a_ia(ambiente: Ambiente) -> None:
+def test_admin_usa_groups_sem_chamar_a_ia(ambiente: Ambiente) -> None:
     ambiente.cliente.post("/waha/webhook", json=_privada(ADMIN, "/groups"))
 
     ((chat, texto),) = ambiente.canal.textos_enviados
@@ -111,14 +58,24 @@ def test_admin_que_nao_e_aluno_usa_groups_sem_chamar_a_ia(ambiente: Ambiente) ->
     assert ambiente.tutor.chamadas == []
 
 
-def test_admin_que_nao_e_aluno_recebe_o_aviso_para_qualquer_outra_coisa(ambiente: Ambiente) -> None:
-    ambiente.cliente.post("/waha/webhook", json=_privada(ADMIN, "stall"))
-    ambiente.cliente.post("/waha/webhook", json=_privada(ADMIN, "/admin add 5541966665555"))
+@pytest.mark.parametrize("numero", [ADMIN, DONO])
+def test_admin_ou_dono_que_manda_outra_coisa_recebe_a_lista_de_comandos(
+    ambiente: Ambiente, numero: str
+) -> None:
+    ambiente.cliente.post("/waha/webhook", json=_privada(numero, "stall"))
+    ambiente.cliente.post("/waha/webhook", json=_privada(numero, "", midia=True))
 
-    assert [t for _, t in ambiente.canal.textos_enviados] == [
-        messages.sem_plano(ambiente.settings.contact_email)
+    assert ambiente.canal.textos_enviados == [
+        (f"{numero}@c.us", messages.ajuda_do_admin("!")),
+        (f"{numero}@c.us", messages.ajuda_do_admin("!")),
     ]
     assert ambiente.tutor.chamadas == []
+
+
+def test_admin_que_nao_e_dono_nao_usa_admin_e_recebe_a_lista(ambiente: Ambiente) -> None:
+    ambiente.cliente.post("/waha/webhook", json=_privada(ADMIN, "/admin add 5541966665555"))
+
+    assert [t for _, t in ambiente.canal.textos_enviados] == [messages.ajuda_do_admin("!")]
     assert ambiente.banco.listar_admins() == [ADMIN]
 
 
@@ -128,16 +85,6 @@ def test_dono_gerencia_admins_pelo_privado(ambiente: Ambiente) -> None:
     assert ambiente.canal.textos_enviados == [(f"{DONO}@c.us", messages.ADMIN_ADICIONADO)]
     assert ESTRANHO in ambiente.banco.listar_admins()
     assert ambiente.tutor.chamadas == []
-
-
-def test_aluno_comum_que_manda_admin_ou_groups_recebe_comando_desconhecido(
-    ambiente: Ambiente,
-) -> None:
-    ambiente.cliente.post("/waha/webhook", json=_privada(ALUNO_COMUM, "/admin add 5541966665555"))
-    ambiente.cliente.post("/waha/webhook", json=_privada(ALUNO_COMUM, "/groups"))
-
-    assert [t for _, t in ambiente.canal.textos_enviados] == [messages.COMANDO_DESCONHECIDO] * 2
-    assert ambiente.banco.listar_admins() == [ADMIN]
 
 
 # --- grupo: ativar ---------------------------------------------------------------------------

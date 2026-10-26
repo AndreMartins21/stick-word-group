@@ -98,7 +98,6 @@ jobs:
           USER_LEVEL: ${{ vars.USER_LEVEL }}
           TIMEZONE: ${{ vars.TIMEZONE }}
           MAX_GROUPS: ${{ vars.MAX_GROUPS }}
-          CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
           GROUP_PREFIX: ${{ vars.GROUP_PREFIX }}
           LIMITE_POR_SESSAO_GRUPO: ${{ vars.LIMITE_POR_SESSAO_GRUPO }}
           TIMEOUT_MARCACAO_HORAS: ${{ vars.TIMEOUT_MARCACAO_HORAS }}
@@ -115,7 +114,6 @@ jobs:
           MAX_PROCESSAMENTOS: ${{ vars.MAX_PROCESSAMENTOS }}
           GEMINI_THINKING_LEVEL: ${{ vars.GEMINI_THINKING_LEVEL }}
           ALLOWED_NUMBER: ${{ secrets.ALLOWED_NUMBER }}
-          ALLOWED_NUMBERS: ${{ secrets.ALLOWED_NUMBERS }}
           ALLOWED_GROUPS: ${{ secrets.ALLOWED_GROUPS }}
           OWNER_NUMBER: ${{ secrets.OWNER_NUMBER }}
           BOT_NUMBER: ${{ secrets.BOT_NUMBER }}

@@ -126,10 +126,10 @@ def _marcada(texto: str, numero: str = ALUNO_COMUM) -> dict[str, Any]:
     return _do_grupo(GRUPO_FIXO, f"{numero}@c.us", f"!add {texto}")
 
 
-def test_flood_no_privado_avisa_uma_vez_e_o_resto_nao_chega_a_ia() -> None:
+def test_flood_no_grupo_avisa_uma_vez_e_o_resto_nao_chega_a_ia() -> None:
     with criar_ambiente(Limites(pessoa_por_minuto=3)) as a:
         for _ in range(10):
-            a.cliente.post("/waha/webhook", json=_privada(ALUNO_COMUM, "stall"))
+            a.cliente.post("/waha/webhook", json=_marcada("stall"))
 
         avisos = [t for _, t in a.canal.textos_enviados if t == messages.DEVAGAR]
         assert len(avisos) == 1
@@ -180,7 +180,7 @@ def test_audio_acima_do_orcamento_diario_nao_e_baixado(ambiente: Ambiente) -> No
 def test_recusa_registra_limite_atingido_com_motivo(caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.INFO), criar_ambiente(Limites(pessoa_por_minuto=1)) as a:
         for _ in range(3):
-            a.cliente.post("/waha/webhook", json=_privada(ALUNO_COMUM, "stall"))
+            a.cliente.post("/waha/webhook", json=_marcada("stall"))
 
     primeiro, segundo = eventos(caplog.records, "limite_atingido")
     assert (primeiro.motivo, primeiro.avisou, segundo.avisou) == ("minuto", True, False)

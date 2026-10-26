@@ -43,7 +43,6 @@ class Acesso:
     grupos_fixos: Sequence[str]  # ALLOWED_GROUPS
     max_grupos: int
     agora: Callable[[], datetime]
-    contato: str  # o e-mail que o aviso "sem plano" mostra
     prefixo: str = "!"  # GROUP_PREFIX
 
 
@@ -172,10 +171,6 @@ def _comando_privado(texto: str, prefixo: str = "!") -> tuple[str, list[str]] | 
         if comando in {"groups", "grupos", "admin", "teachers", "teacher", "ranking"}
         else None
     )
-
-
-def eh_comando_de_admin(texto: str, prefixo: str = "!") -> bool:
-    return _comando_privado(texto, prefixo) is not None
 
 
 async def comando_privado(a: Acesso, texto: str, numero: str) -> str | list[str] | Arquivo | None:

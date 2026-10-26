@@ -70,29 +70,6 @@ TRANSICOES = [
     (Estado.REVIEWING, "0", Transicao(Estado.IDLE, Acao.ENCERRAR_REVISAO)),
     (Estado.REVIEWING, "stop", Transicao(Estado.IDLE, Acao.ENCERRAR_REVISAO)),
     (Estado.REVIEWING, "Quit", Transicao(Estado.IDLE, Acao.ENCERRAR_REVISAO)),
-    # SONG_PICKING (M13): número escolhe, "sair" cancela, outro texto é uma nova busca.
-    (Estado.SONG_PICKING, "2", Transicao(Estado.SONG_PRACTICE, Acao.ESCOLHER_MUSICA, "2")),
-    (Estado.SONG_PICKING, "0", Transicao(Estado.IDLE, Acao.CANCELAR_MUSICA)),
-    (
-        Estado.SONG_PICKING,
-        "paper plane - the inventors",
-        Transicao(Estado.SONG_PICKING, Acao.BUSCAR_MUSICA, "paper plane - the inventors"),
-    ),
-    # SONG_PRACTICE: qualquer texto é a explicação do verso, exceto "sair".
-    (
-        Estado.SONG_PRACTICE,
-        "ele deixou as chaves perto da porta",
-        Transicao(
-            Estado.SONG_PRACTICE, Acao.RESPONDER_VERSO, "ele deixou as chaves perto da porta"
-        ),
-    ),
-    (Estado.SONG_PRACTICE, "1", Transicao(Estado.SONG_PRACTICE, Acao.RESPONDER_VERSO, "1")),
-    (Estado.SONG_PRACTICE, "0", Transicao(Estado.SONG_SAVING, Acao.ENCERRAR_MUSICA)),
-    # SONG_SAVING: números ou "all" salvam, "sair" descarta, outro texto é palavra nova.
-    (Estado.SONG_SAVING, "1 3", Transicao(Estado.IDLE, Acao.SALVAR_EXPRESSOES, "1 3")),
-    (Estado.SONG_SAVING, "all", Transicao(Estado.IDLE, Acao.SALVAR_EXPRESSOES, "all")),
-    (Estado.SONG_SAVING, "0", Transicao(Estado.IDLE, Acao.DESCARTAR_EXPRESSOES)),
-    (Estado.SONG_SAVING, "hedge", Transicao(Estado.AWAIT_ACTION, Acao.EXPLICAR, "hedge")),
 ]
 
 

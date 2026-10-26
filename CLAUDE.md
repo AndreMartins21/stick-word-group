@@ -1,12 +1,15 @@
-# CLAUDE.md — Vocabot
+# CLAUDE.md — stick-word-group
+
+Bot de WhatsApp para **turmas de inglês em grupo**: vocabulário da turma, revisão diária e desafio
+semanal. No privado, só o dono e os admins, e só com os comandos de admin; qualquer outro número é
+ignorado sem gastar IA. O estudo individual é o projeto irmão **stick-word** (ADR-0062).
 
 Instruções para o Claude Code trabalhar neste repositório. Responda sempre em **PT-BR**.
 
 ## Fonte da verdade
 
 A especificação completa do projeto está em **[`spec/spec-inicial.md`](spec/spec-inicial.md)** — escopo,
-stack, máquina de estados, contratos de dados, formato do export (Excel), infraestrutura e a tabela de
-marcos. **Leia a seção relevante antes de escrever código.** Código que contraria a spec é bug.
+stack, máquina de estados, contratos de dados, infraestrutura e a tabela de marcos. **Leia a seção relevante antes de escrever código.** Código que contraria a spec é bug.
 
 Trabalhe **marco a marco** (seção 9 da spec): pare ao fim de cada um, relate e espere aprovação.
 
@@ -77,7 +80,7 @@ O layout esperado completo está na seção 11 da spec.
 - **Testes nunca dependem de credencial ou rede.** Cada dependência externa (WAHA, Firestore,
   Storage, LLM) tem um fake em memória por trás de uma interface (`Channel`, `Repository`,
   `LLMProvider`). A lógica de negócio não importa nada do WAHA diretamente.
-- O export em Excel é testado relendo o `.xlsx` gerado (abas, cabeçalhos e valores).
+- O PDF do `/ranking` é testado relendo o arquivo gerado (pypdf).
 - Decisões com consequência duradoura viram ADR em `docs/adr/` — numeração `NNNN-titulo-curto.md`,
   índice e regras em `docs/adr/README.md`. `make test` reprova ADR malformado ou fora do índice.
 - Mudou um contrato? Atualize a spec **no mesmo commit** que muda o código.

@@ -129,17 +129,19 @@ def test_sessao_persiste_a_fila_de_revisao(repo: Repository) -> None:
     assert repo.obter_sessao() == sessao
 
 
-def test_perfil_persiste_os_campos_de_lembretes(repo: Repository) -> None:
+def test_perfil_persiste_os_campos_da_agenda(repo: Repository) -> None:
     perfil = Profile(
         nivel="B1-B2",
         criado_em=T0,
-        lembretes_por_dia=3,
-        janela_inicio=9,
-        janela_fim=22,
-        chat_id="5531999998888@c.us",
-        proximo_lembrete=T0 + timedelta(hours=3),
-        lembrete_sem_resposta=True,
-        avisou_lembretes=True,
+        chat_id="120363000000000000@g.us",
+        diaria_hora=9,
+        diaria_minuto=30,
+        diaria_fim_de_semana=True,
+        proxima_diaria=T0 + timedelta(hours=3),
+        revisoes_sem_resposta=2,
+        semanal_dia=1,
+        proxima_semanal=T0 + timedelta(days=2),
+        tamanho_revisao=8,
     )
 
     repo.salvar_perfil(perfil)
@@ -350,41 +352,48 @@ def test_apagar_tudo_limpa_so_o_espaco_pedido(banco: Banco) -> None:
     assert len(b.listar_frases("stall")) == 1
 
 
-def _lembretes(chat: str, proximo: datetime | None, por_dia: int = 3) -> Profile:
-    return Profile(nivel="B1-B2", chat_id=chat, lembretes_por_dia=por_dia, proximo_lembrete=proximo)
+GRUPO_B = "120363000000000002@g.us"
 
 
-def test_espacos_com_lembrete_devolve_so_os_vencidos(banco: Banco) -> None:
-    banco.do_espaco(ALUNO_A).salvar_perfil(_lembretes(ALUNO_A, T0 - timedelta(minutes=5)))
-    banco.do_espaco(ALUNO_B).salvar_perfil(_lembretes(ALUNO_B, T0 + timedelta(hours=1)))
-    banco.do_espaco(GRUPO).salvar_perfil(_lembretes(GRUPO, T0))
-
-    assert sorted(banco.listar_espacos_com_lembrete(T0)) == sorted([ALUNO_A, GRUPO])
-
-
-def test_espaco_com_lembrete_ligado_mas_sem_horario_ainda_conta_como_vencido(
-    banco: Banco,
-) -> None:
-    banco.do_espaco(ALUNO_A).salvar_perfil(_lembretes(ALUNO_A, None))
-
-    assert banco.listar_espacos_com_lembrete(T0) == [ALUNO_A]
-
-
-def test_espaco_sem_lembretes_ou_sem_destino_nunca_aparece(banco: Banco) -> None:
-    banco.do_espaco(ALUNO_A).salvar_perfil(_lembretes(ALUNO_A, None, por_dia=0))
-    banco.do_espaco(ALUNO_B).salvar_perfil(
-        Profile(nivel="B1-B2", chat_id=None, lembretes_por_dia=3)
+def _agenda(chat: str, proxima: datetime | None, *, ligada: bool = True) -> Profile:
+    """Um grupo só com a revisão diária (o semanal desligado), com destino conhecido."""
+    return Profile(
+        nivel="B1-B2",
+        chat_id=chat,
+        diaria_ligada=ligada,
+        proxima_diaria=proxima,
+        semanal_ligada=False,
     )
+
+
+def test_espacos_com_lembrete_devolve_so_os_grupos_vencidos(banco: Banco) -> None:
+    banco.do_espaco(GRUPO).salvar_perfil(_agenda(GRUPO, T0 - timedelta(minutes=5)))
+    banco.do_espaco(GRUPO_B).salvar_perfil(_agenda(GRUPO_B, T0 + timedelta(hours=1)))
+
+    assert banco.listar_espacos_com_lembrete(T0) == [GRUPO]
+
+
+def test_grupo_com_diaria_ligada_mas_sem_horario_ainda_conta_como_vencido(banco: Banco) -> None:
+    banco.do_espaco(GRUPO).salvar_perfil(_agenda(GRUPO, None))
+
+    assert banco.listar_espacos_com_lembrete(T0) == [GRUPO]
+
+
+def test_espaco_privado_sem_agenda_ou_sem_destino_nunca_aparece(banco: Banco) -> None:
+    """ADR-0062: um espaço privado de antes da separação nunca entra na consulta."""
+    banco.do_espaco(ALUNO_A).salvar_perfil(_agenda(ALUNO_A, T0 - timedelta(days=1)))
+    banco.do_espaco(GRUPO).salvar_perfil(_agenda(GRUPO, None, ligada=False))
+    banco.do_espaco(GRUPO_B).salvar_perfil(Profile(nivel="B1-B2", chat_id=None))
 
     assert banco.listar_espacos_com_lembrete(T0) == []
 
 
-def test_desligar_os_lembretes_tira_o_espaco_da_consulta(banco: Banco) -> None:
-    espaco = banco.do_espaco(ALUNO_A)
-    espaco.salvar_perfil(_lembretes(ALUNO_A, T0))
-    assert banco.listar_espacos_com_lembrete(T0) == [ALUNO_A]
+def test_desligar_a_diaria_tira_o_grupo_da_consulta(banco: Banco) -> None:
+    espaco = banco.do_espaco(GRUPO)
+    espaco.salvar_perfil(_agenda(GRUPO, T0))
+    assert banco.listar_espacos_com_lembrete(T0) == [GRUPO]
 
-    espaco.salvar_perfil(_lembretes(ALUNO_A, T0, por_dia=0))
+    espaco.salvar_perfil(_agenda(GRUPO, T0, ligada=False))
 
     assert banco.listar_espacos_com_lembrete(T0) == []
 
@@ -486,12 +495,12 @@ def test_ativar_de_novo_um_grupo_desativado_volta_a_valer(banco: Banco) -> None:
 def test_grupo_ativado_com_perfil_nao_perde_o_espelho_dos_lembretes(banco: Banco) -> None:
     """A ativação e o `salvar_perfil` escrevem no mesmo documento do espaço: um não apaga o outro."""
     espaco = banco.do_espaco(GRUPO)
-    espaco.salvar_perfil(_lembretes(GRUPO, T0))
+    espaco.salvar_perfil(_agenda(GRUPO, T0))
     banco.ativar_grupo(GRUPO, nome=None, por="5531999998888", agora=T0)
 
     assert banco.listar_espacos_com_lembrete(T0) == [GRUPO]
     assert banco.grupo_esta_ativo(GRUPO) is True
-    espaco.salvar_perfil(_lembretes(GRUPO, T1))
+    espaco.salvar_perfil(_agenda(GRUPO, T1))
     assert banco.grupo_esta_ativo(GRUPO) is True
 
 
@@ -682,7 +691,7 @@ def test_desativar_o_grupo_tira_os_lembretes_dele_da_consulta_e_reativar_devolve
     banco: Banco,
 ) -> None:
     banco.ativar_grupo(GRUPO, nome=None, por="5531999998888", agora=T0)
-    banco.do_espaco(GRUPO).salvar_perfil(_lembretes(GRUPO, T0))
+    banco.do_espaco(GRUPO).salvar_perfil(_agenda(GRUPO, T0))
     assert banco.listar_espacos_com_lembrete(T0) == [GRUPO]
 
     banco.desativar_grupo(GRUPO)

@@ -1,5 +1,8 @@
 # Plano — Dashboard de saúde e uso do Vocabot (observabilidade)
 
+> **ADR-0062:** este projeto é só de grupos. As colunas de lembrete do privado saíram do snapshot
+> (ver `infra/bq/*.json`); espaços privados antigos ainda aparecem, mas não recebem mais nada.
+
 > Status: **plano, nada implementado** (2026-09-25). Estende a spec (`spec/spec-inicial.md`) com uma
 > seção nova de observabilidade. Os marcos daqui (M27–M30) vêm depois do M18 (piloto), mas não
 > dependem dele. Os pontos marcados com **[confirmar]** devem ser checados na documentação oficial

@@ -1,9 +1,8 @@
-"""Simulador de terminal: a conversa inteira, sem WhatsApp (seção 9, M6).
+"""Simulador de terminal: um grupo de turma inteiro, sem WhatsApp (seção 9, M6/M16).
 
-    python -m sim [--real-llm] [--letras-reais] [--tts-real] [--nivel B1-B2]
-    python -m sim --grupo [--professor NOME]...
+    python -m sim [--real-llm] [--tts-real] [--nivel B1-B2] [--professor NOME]...
 
-Com `--grupo` (M16), simula um grupo de turma com vários participantes: cada linha é
+Simula um grupo de turma com vários participantes: cada linha é
 `nome: mensagem` (ex.: `ana: @bot stall`). Só chegam ao bot as linhas que marcam o bot (`@bot` em
 qualquer lugar da linha) e as que começam com um comando (`!` ou `/`); as outras aparecem como
 ignoradas, como no WhatsApp real. O participante `dono` é o dono do
@@ -15,10 +14,9 @@ pergunta; `/1`, `/2`, `/3` com barra); `~timeout` fecha a rodada parada sem espe
 Usa `ConsoleChannel` e `MemoryRepository` (nada é gravado; ao sair, tudo some), e o mesmo
 `Router` do bot. Sem `--real-llm`, as respostas de IA são fabricadas (`SimTutor`); com ele, usa o
 Gemini com as credenciais locais do Google (`gcloud auth application-default login`), lendo
-GCP_PROJECT_ID e GEMINI_MODEL do ambiente (`make sim` carrega o `.env`). `/exportar` grava o
-planilha Excel em `exports/`. `/song paper plane` pratica com uma música inventada (com
-`--letras-reais`, busca no LRCLIB de verdade). A pronúncia (opção 5, `/listen`) grava `.ogg` em
-`exports/audio/` e `exports/voz_NNN.ogg`; sem `--tts-real` o áudio é um dublê (não toca). Digite `sair` para terminar.
+GCP_PROJECT_ID e GEMINI_MODEL do ambiente (`make sim` carrega o `.env`). A pronúncia grava `.ogg`
+em `exports/audio/` e `exports/voz_NNN.ogg`; sem `--tts-real` o áudio é um dublê (não toca).
+Digite `sair` para terminar.
 """
 
 from __future__ import annotations
@@ -41,15 +39,11 @@ from app.flows.router import Router
 from app.repo.memory import MemoryBanco
 from app.services.audio import ServicoAudio
 from app.services.fake_tts import FakeSintetizador
-from app.services.letras import LrclibProvider, LyricsProvider
 from app.services.llm import LLMError, Tutor, tutor_do_ambiente
-from app.services.planilha import ExportadorExcel
-from app.services.storage import ArmazenamentoLocal, CacheAudioLocal
+from app.services.storage import CacheAudioLocal
 from app.services.tts import GoogleTts, Sintetizador
-from sim.letras import letras_do_simulador
 from sim.tutor import SimTutor
 
-CHAT_DO_SIMULADOR = "simulador@c.us"
 GRUPO_DO_SIMULADOR = "120363000000000001@g.us"
 PREFIXO_DO_SIMULADOR = "!"
 VOZ_DO_SIMULADOR = "en-US-Neural2-F"
@@ -57,28 +51,8 @@ NOME_DO_DONO = "dono"
 _SAIDAS = {"sair", "exit", "quit", ":q"}
 
 
-async def _status_do_simulador() -> str:
-    return "SIMULADOR"
-
-
 async def _sem_espera(_: float) -> None:
     return None
-
-
-async def _conversar(
-    router: Router, entrada: Callable[[str], str], saida: Callable[[str], None]
-) -> None:
-    saida("Simulador do vocabot — mande uma palavra em inglês, /ajuda ou 'sair'.\n")
-    while True:
-        try:
-            texto = await asyncio.to_thread(entrada, "você> ")
-        except EOFError:
-            return
-        texto = texto.strip()
-        if texto.lower() in _SAIDAS:
-            return
-        if texto:
-            await router.processar(texto, CHAT_DO_SIMULADOR)
 
 
 def numero_do_participante(nome: str) -> str:
@@ -155,9 +129,6 @@ def main(
     )
     parser.add_argument("--model", help="ID do modelo (com --real-llm)")
     parser.add_argument(
-        "--letras-reais", action="store_true", help="busca as letras do /song no LRCLIB"
-    )
-    parser.add_argument(
         "--tts-real",
         action="store_true",
         help="fala com o Google Cloud TTS de verdade (precisa de credencial); sem isto, o áudio é um dublê",
@@ -166,11 +137,11 @@ def main(
         "--nivel", choices=["A1-A2", "A2-B1", "B1-B2", "B2-C1", "C1-C2", "C2"], default="B1-B2"
     )
     parser.add_argument(
-        "--grupo", action="store_true", help="simula um grupo de turma (`nome: mensagem`)"
+        "--grupo",
+        action="store_true",
+        help="aceito por compatibilidade: o simulador é sempre um grupo",
     )
-    parser.add_argument(
-        "--professor", action="append", default=[], help="cadastra um professor (com --grupo)"
-    )
+    parser.add_argument("--professor", action="append", default=[], help="cadastra um professor")
     parser.add_argument(
         "--atraso", action="store_true", help="mantém a espera de 1-2 s antes de cada resposta"
     )
@@ -196,32 +167,25 @@ def main(
         return Conversa(canal, chat_id, dormir=_sem_espera)
 
     nivel: NivelUsuario = args.nivel
-    letras: LyricsProvider = LrclibProvider() if args.letras_reais else letras_do_simulador()
     sintetizador: Sintetizador = GoogleTts() if args.tts_real else FakeSintetizador()
     router = Router(
         banco=banco,
         tutor=tutor,
         criar_conversa=criar_conversa,
         nivel_padrao=nivel,
-        status_da_sessao=_status_do_simulador,
-        exportador=ExportadorExcel(ArmazenamentoLocal(exports)),
-        letras=letras,
         audio=ServicoAudio(sintetizador, CacheAudioLocal(exports / "audio"), VOZ_DO_SIMULADOR),
         prefixo_do_grupo=PREFIXO_DO_SIMULADOR,
         config_grupo=ConfigGrupo(participantes=canal.group_participants),
         eh_dono=lambda numero: numero == numero_do_participante(NOME_DO_DONO),
     )
-    if args.grupo:
-        espaco = banco.do_espaco(GRUPO_DO_SIMULADOR)
-        for nome in args.professor:
-            espaco.salvar_membro(
-                numero_do_participante(nome),
-                Membro(papel="professor", nome=nome, entrou_em=agora_utc()),
-            )
-            nomes[numero_do_participante(nome)] = nome
-        asyncio.run(_conversar_no_grupo(router, entrada, saida, nomes))
-        return 0
-    asyncio.run(_conversar(router, entrada, saida))
+    espaco = banco.do_espaco(GRUPO_DO_SIMULADOR)
+    for nome in args.professor:
+        espaco.salvar_membro(
+            numero_do_participante(nome),
+            Membro(papel="professor", nome=nome, entrou_em=agora_utc()),
+        )
+        nomes[numero_do_participante(nome)] = nome
+    asyncio.run(_conversar_no_grupo(router, entrada, saida, nomes))
     return 0
 
 

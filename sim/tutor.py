@@ -14,7 +14,6 @@ from app.domain.models import (
     Evaluation,
     Expansion,
     Explanation,
-    LinhaDaMusica,
     NivelUsuario,
     PerguntaSemanal,
     Revisao,
@@ -183,27 +182,6 @@ class SimTutor:
         if contem_palavra_alvo(resposta, palavra):
             return Revisao(tipo="frase", qualidade="bom", feedback=_NOTA_DO_SIMULADOR)
         return Revisao(tipo="definicao", qualidade="bom", feedback=_NOTA_DO_SIMULADOR)
-
-    def song_line(
-        self,
-        titulo: str,
-        artista: str,
-        verso: str,
-        verso_anterior: str | None,
-        resposta: str,
-        nivel: NivelUsuario,
-    ) -> LinhaDaMusica:
-        """Sem IA: "não sei" vira `nao_entendeu` apontando a palavra mais longa do verso (só para
-        o simulador ter algo a oferecer para salvar no fim)."""
-        if resposta.strip().lower() in {"", "i don't know", "no idea", "idk", "nao sei", "não sei"}:
-            mais_longa = max(verso.replace(",", " ").split(), key=len)
-            return LinhaDaMusica(
-                compreensao="nao_entendeu",
-                feedback=_NOTA_DO_SIMULADOR,
-                significado="(simulated meaning)",
-                expressoes=[mais_longa],
-            )
-        return LinhaDaMusica(compreensao="entendeu", feedback=_NOTA_DO_SIMULADOR)
 
     def weekly_questions(
         self, vocabulario: Sequence[tuple[str, str]], nivel: NivelUsuario, n: int

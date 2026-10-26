@@ -12,7 +12,6 @@ from app.domain.models import (
     Evaluation,
     Expansion,
     Explanation,
-    LinhaDaMusica,
     NivelUsuario,
     PerguntaSemanal,
     Revisao,
@@ -70,7 +69,6 @@ class FakeTutor:
     sinonimos: list[list[Synonym] | Exception] = field(default_factory=list)
     roteamentos: list[Roteamento | Exception] = field(default_factory=list)
     revisoes: list[Revisao | Exception] = field(default_factory=list)
-    linhas_de_musica: list[LinhaDaMusica | Exception] = field(default_factory=list)
     perguntas_semanais: list[list[PerguntaSemanal] | Exception] = field(default_factory=list)
     avaliacoes_da_pergunta: list[AvaliacaoDaPergunta | Exception] = field(default_factory=list)
     chamadas: list[tuple[str, tuple[object, ...]]] = field(default_factory=list)
@@ -143,18 +141,6 @@ class FakeTutor:
     ) -> Revisao:
         self.chamadas.append(("review", (palavra, sentido.traducao, resposta, nivel)))
         return self._proxima(self.revisoes)
-
-    def song_line(
-        self,
-        titulo: str,
-        artista: str,
-        verso: str,
-        verso_anterior: str | None,
-        resposta: str,
-        nivel: NivelUsuario,
-    ) -> LinhaDaMusica:
-        self.chamadas.append(("song_line", (titulo, verso, resposta, nivel)))
-        return self._proxima(self.linhas_de_musica)
 
     def weekly_questions(
         self, vocabulario: Sequence[tuple[str, str]], nivel: NivelUsuario, n: int

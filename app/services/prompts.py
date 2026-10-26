@@ -274,39 +274,6 @@ def prompt_review(
     return Prompt(_sistema(nivel, tarefa), _delimitar(resposta_do_aluno))
 
 
-def prompt_song_line(
-    nivel: NivelUsuario,
-    titulo: str,
-    artista: str,
-    verso: str,
-    verso_anterior: str | None,
-    resposta_do_aluno: str,
-) -> Prompt:
-    contexto = f"- Verso anterior (só contexto): {verso_anterior}\n" if verso_anterior else ""
-    tarefa = (
-        "julgar a explicação do aluno para um verso de música (M13): ele leu o verso e tentou "
-        "explicar o que significa, em inglês OU em português — as duas línguas valem igual.\n"
-        f"- Música: {titulo} — {artista}\n"
-        f"{contexto}"
-        f"- Verso: {verso}\n"
-        "- `compreensao`: `entendeu` (captou o sentido, mesmo com palavras simples ou tradução "
-        "livre), `parcial` (pegou parte, errou ou pulou algum pedaço importante), `nao_entendeu` "
-        "(errou o sentido, disse que não sabe, ou a resposta não tem relação com o verso).\n"
-        "- Julgue o **sentido**, não a gramática do aluno. Letra de música é poética: aceite "
-        "interpretações razoáveis e explique gírias, metáforas e expressões idiomáticas.\n"
-        "- `feedback`: em inglês, no máximo 4 linhas, tom encorajador — diga o que ele acertou e "
-        "o que faltou. **Nunca copie o verso inteiro**: cite no máximo a palavra ou expressão "
-        "de que está falando.\n"
-        "- `significado`: quando `compreensao` não é `entendeu`, o sentido do verso em inglês "
-        "simples, em uma frase curta, com as suas palavras (não repita o verso); senão, vazio.\n"
-        "- `expressoes`: até 3 palavras ou expressões **copiadas exatamente como aparecem no "
-        "verso** que o aluno parece não ter entendido (gírias, phrasal verbs, expressões "
-        "idiomáticas, vocabulário menos comum). Nunca palavras básicas (the, love, go) nem "
-        "nomes próprios. Vazio se ele entendeu tudo."
-    )
-    return Prompt(_sistema(nivel, tarefa, marcar_alvo=False), _delimitar(resposta_do_aluno))
-
-
 _COMPLEXIDADE_DA_PERGUNTA: dict[NivelUsuario, str] = {
     "A1-A2": "muito simples: frases curtas (até 10 palavras), presente simples, um só assunto "
     "concreto do dia a dia; nada de condicionais nem vocabulário abstrato.",

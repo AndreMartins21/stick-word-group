@@ -17,11 +17,9 @@ from datetime import datetime
 
 from app import messages
 from app.channel.parser import numero_esta_na_lista
-from app.domain.lembretes import TAMANHO_REVISAO_PADRAO
 from app.domain.models import Entry, Estado, Membro, Profile, Resposta, Sentence, Sessao
 from app.domain.rodizio import Candidato, escolher
 from app.domain.srs import reagendar, vencida
-from app.flows import pronuncia
 from app.flows.base import Deps, bloq
 from app.logging_config import id_curto, registrar_evento
 from app.repo.base import tipo_do_espaco
@@ -50,15 +48,12 @@ def montar_fila(
     return [e.slug for e in (*vencidas, *completar)]
 
 
-def limite(d: Deps, perfil: Profile, total_palavras: int) -> int:
-    """Palavras por rodada (M24): um `tamanho_revisao` fixo (`/reviewsize`, ou o último parâmetro
-    de `/reminders`) sobrepõe tudo; sem ele, `LIMITE_POR_SESSAO_GRUPO` (5) no grupo, ou
-    `MIN(palavras do aluno, TAMANHO_REVISAO_PADRAO)` no privado."""
+def limite(d: Deps, perfil: Profile) -> int:
+    """Palavras por rodada (M24): um `tamanho_revisao` fixo (`!daily ... size N`) sobrepõe o
+    padrão, `LIMITE_POR_SESSAO_GRUPO` (5)."""
     if perfil.tamanho_revisao is not None:
         return perfil.tamanho_revisao
-    if d.em_grupo:
-        return d.grupo_cfg.limite
-    return min(total_palavras, TAMANHO_REVISAO_PADRAO)
+    return d.grupo_cfg.limite
 
 
 # --- quem é marcado (grupo) -------------------------------------------------------------------
@@ -124,7 +119,7 @@ async def marcar(
 async def iniciar(d: Deps, perfil: Profile) -> Sessao:
     """Começa a rodada (o `/review`, o `!review` ou o agendador)."""
     entradas = await bloq(d.repo.listar_entradas)
-    fila = montar_fila(entradas, d.agora(), limite=limite(d, perfil, len(entradas)))
+    fila = montar_fila(entradas, d.agora(), limite=limite(d, perfil))
     if not fila:
         return d.sessao_vazia()
     d.conversa.nova_iniciativa()  # o bot está iniciando, não respondendo — reseta o limite de 3
@@ -161,7 +156,7 @@ async def responder(d: Deps, sessao: Sessao, perfil: Profile, texto: str) -> Ses
         espaco=id_curto(d.chat_id),
         tipo_espaco=tipo_do_espaco(d.chat_id),
         qualidade=revisao.qualidade,
-        **({"marcado": False} if d.em_grupo else {}),
+        marcado=False,
     )
     if revisao.tipo == "frase":
         await bloq(
@@ -175,7 +170,7 @@ async def responder(d: Deps, sessao: Sessao, perfil: Profile, texto: str) -> Ses
                 criado_em=agora,
             ),
         )
-    if d.em_grupo and d.autor_id:
+    if d.autor_id:
         await bloq(
             d.repo.registrar_resposta,
             Resposta(
@@ -188,7 +183,7 @@ async def responder(d: Deps, sessao: Sessao, perfil: Profile, texto: str) -> Ses
             ),
         )
     nome = d.autor.nome if d.autor else None
-    if d.em_grupo and revisao.qualidade == "de_novo":
+    if revisao.qualidade == "de_novo":
         # Ainda não está certo: feedback, e a palavra segue aberta para outro tentar (ou `skip`).
         await d.conversa.enviar(messages.diaria_tente_de_novo(revisao, nome, d.p))
         return sessao
@@ -210,19 +205,15 @@ async def responder(d: Deps, sessao: Sessao, perfil: Profile, texto: str) -> Ses
     )
 
     feitas = [*sessao.revisao_feitas, entrada.palavra]
-    fila = list(sessao.revisao_fila)
-    lapsos = list(sessao.revisao_lapsos)
-    if revisao.qualidade == "de_novo":
-        fila = [*fila, entrada.slug]  # volta ao fim da fila DESTA sessão, como no Anki
-        lapsos = [*lapsos, entrada.palavra]
-
-    feedback = (
-        messages.feedback_da_diaria(revisao, nome)
-        if d.em_grupo
-        else messages.feedback_de_revisao(revisao)
-    )
+    feedback = messages.feedback_da_diaria(revisao, nome)
     return await _mostrar_proxima(
-        d, feedback, fila, feitas, lapsos, sessao.revisao_total, puladas=sessao.revisao_puladas
+        d,
+        feedback,
+        list(sessao.revisao_fila),
+        feitas,
+        list(sessao.revisao_lapsos),
+        sessao.revisao_total,
+        puladas=sessao.revisao_puladas,
     )
 
 
@@ -269,7 +260,7 @@ async def encerrar(d: Deps, sessao: Sessao) -> Sessao:
     )
     await d.conversa.enviar(
         messages.revisao_encerrada(
-            sessao.revisao_feitas, sessao.revisao_lapsos, puladas=sessao.revisao_puladas, p=d.p
+            sessao.revisao_feitas, sessao.revisao_lapsos, puladas=sessao.revisao_puladas
         )
     )
     return d.sessao_vazia()
@@ -283,7 +274,7 @@ async def fechar_por_inatividade(d: Deps, sessao: Sessao) -> Sessao:
     d.conversa.nova_iniciativa()
     await d.conversa.enviar(
         messages.revisao_inativa(
-            sessao.revisao_feitas, sessao.revisao_lapsos, puladas=sessao.revisao_puladas, p=d.p
+            sessao.revisao_feitas, sessao.revisao_lapsos, puladas=sessao.revisao_puladas
         )
     )
     return d.sessao_vazia()
@@ -308,12 +299,8 @@ async def _mostrar_proxima(
         if entrada is None:
             continue
         indice = min(len(feitas) + len(puladas) + 1, total)
-        card = messages.card_de_revisao(indice, total, entrada.palavra, grupo=d.grupo_prefixo)
+        card = messages.card_de_revisao(indice, total, entrada.palavra)
         await d.conversa.enviar(f"{feedback}\n\n{card}" if feedback else card)
-        if not d.em_grupo:
-            # M26: só o termo, só no privado — no grupo o orçamento de 3 mensagens é curto
-            # (feedback + card + fechamento) e áudio ali arrisca derrubar um deles em silêncio.
-            await pronuncia.ouvir(d, entrada, anunciar=False, com_frase=False)
         return Sessao(
             estado=Estado.REVIEWING,
             revisao_fila=restante,
@@ -322,11 +309,11 @@ async def _mostrar_proxima(
             revisao_lapsos=lapsos,
             revisao_total=total,
             revisao_puladas=list(puladas),
-            marcacao_expira_em=(d.agora() + d.grupo_cfg.timeout) if d.em_grupo else None,
+            marcacao_expira_em=d.agora() + d.grupo_cfg.timeout,
             atualizado_em=d.agora(),
         )
 
     _registrar_conclusao(d, feitas, lapsos, total, "fila_vazia")
-    resumo = messages.revisao_encerrada(feitas, lapsos, puladas=puladas, p=d.p)
+    resumo = messages.revisao_encerrada(feitas, lapsos, puladas=puladas)
     await d.conversa.enviar(f"{feedback}\n\n{resumo}" if feedback else resumo)
     return d.sessao_vazia()

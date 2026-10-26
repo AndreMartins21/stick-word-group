@@ -8,7 +8,6 @@ import re
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from app.domain.lembretes import MAX_TAMANHO_REVISAO, MIN_TAMANHO_REVISAO
 from app.domain.models import Profile
 
 _HORA = re.compile(r"^(\d{1,2})(?:h|:)?(\d{2})?$")
@@ -19,6 +18,9 @@ _TAMANHO = {"size", "tamanho"}
 _AUTO = {"auto", "automatic"}
 MAX_REVISOES_SEM_RESPOSTA = 3
 MAX_PERGUNTAS = 10  # teto do desafio semanal (M36)
+# Tamanho da rodada de revisão (M24) que `!daily ... size N` aceita.
+MIN_TAMANHO_REVISAO = 1
+MAX_TAMANHO_REVISAO = 20
 _DIAS: dict[str, int] = {}
 for _i, _nomes in enumerate(
     [

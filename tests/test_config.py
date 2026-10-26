@@ -17,7 +17,6 @@ def _env_minimo() -> dict[str, str]:
         "BOT_NUMBER": "5531988887777",
         "WAHA_API_KEY": "fake-local-key",
         "GCP_PROJECT_ID": "meu-projeto-local",
-        "EXPORT_BUCKET": "meu-projeto-vocabot-exports",
     }
 
 
@@ -35,7 +34,6 @@ def test_carrega_com_os_campos_minimos_obrigatorios(monkeypatch: pytest.MonkeyPa
     assert settings.allowed_number == "5531999998888"
     assert settings.bot_number == "5531988887777"
     assert settings.gcp_project_id == "meu-projeto-local"
-    assert settings.export_bucket == "meu-projeto-vocabot-exports"
 
 
 def test_valores_padrao_seguem_a_secao_4_da_spec(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -113,44 +111,28 @@ def test_opcional_vazio_no_env_conta_como_nao_definido(
     assert settings.gemini_model is None
 
 
-# --- M14: allowlist com vários alunos, grupos e dono (ADR-0017) --------------------------------
+# --- dono e grupos fixos (M14, ADR-0062) -------------------------------------------------------
 
 
 def _sem_numeros(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ALLOWED_NUMBER", raising=False)
-    monkeypatch.delenv("ALLOWED_NUMBERS", raising=False)
+    monkeypatch.delenv("OWNER_NUMBER", raising=False)
 
 
-def test_allowed_number_antigo_continua_valendo_como_lista_de_um(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _com_env(monkeypatch)
+def test_dono_e_o_allowed_number_legado(monkeypatch: pytest.MonkeyPatch) -> None:
+    _com_env(monkeypatch, ALLOWED_NUMBER="+55 31 99999-8888")
 
-    settings = Settings(_env_file=None)
-
-    assert settings.numeros_permitidos == ["5531999998888"]
+    assert Settings(_env_file=None).dono == "5531999998888"
 
 
-def test_allowed_numbers_e_lista_separada_por_virgula(monkeypatch: pytest.MonkeyPatch) -> None:
-    _com_env(monkeypatch, ALLOWED_NUMBERS=" +55 31 99999-8888, 5511988887777 ,,")
+def test_owner_number_sozinho_basta(monkeypatch: pytest.MonkeyPatch) -> None:
+    _com_env(monkeypatch, OWNER_NUMBER="5511988887777")
     monkeypatch.delenv("ALLOWED_NUMBER")
 
-    settings = Settings(_env_file=None)
-
-    assert settings.numeros_permitidos == ["5531999998888", "5511988887777"]
+    assert Settings(_env_file=None).dono == "5511988887777"
 
 
-def test_allowed_number_e_allowed_numbers_juntam_sem_repetir(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _com_env(monkeypatch, ALLOWED_NUMBERS="5511988887777,5531999998888")
-
-    settings = Settings(_env_file=None)
-
-    assert settings.numeros_permitidos == ["5531999998888", "5511988887777"]
-
-
-def test_falha_sem_nenhum_numero_permitido(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_falha_sem_o_numero_do_dono(monkeypatch: pytest.MonkeyPatch) -> None:
     _com_env(monkeypatch)
     _sem_numeros(monkeypatch)
 
@@ -158,26 +140,10 @@ def test_falha_sem_nenhum_numero_permitido(monkeypatch: pytest.MonkeyPatch) -> N
         Settings(_env_file=None)
 
 
-def test_dono_padrao_e_o_primeiro_numero_da_lista(monkeypatch: pytest.MonkeyPatch) -> None:
-    _com_env(monkeypatch, ALLOWED_NUMBERS="5511988887777,5531999998888")
-    monkeypatch.delenv("ALLOWED_NUMBER")
+def test_owner_number_explicito_vence_o_padrao(monkeypatch: pytest.MonkeyPatch) -> None:
+    _com_env(monkeypatch, OWNER_NUMBER="5511988887777")
 
     assert Settings(_env_file=None).dono == "5511988887777"
-
-
-def test_dono_padrao_e_o_allowed_number_antigo_mesmo_com_a_lista_nova(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """O número que já usava o bot é o dono; alunos novos em ALLOWED_NUMBERS não o substituem."""
-    _com_env(monkeypatch, ALLOWED_NUMBERS="5511988887777")
-
-    assert Settings(_env_file=None).dono == "5531999998888"
-
-
-def test_owner_number_explicito_vence_o_padrao(monkeypatch: pytest.MonkeyPatch) -> None:
-    _com_env(monkeypatch, OWNER_NUMBER="5531999998888", ALLOWED_NUMBERS="5511988887777")
-
-    assert Settings(_env_file=None).dono == "5531999998888"
 
 
 def test_grupos_permitidos_vazio_por_padrao_e_lista_quando_definido(
@@ -194,7 +160,7 @@ def test_grupos_permitidos_vazio_por_padrao_e_lista_quando_definido(
     ]
 
 
-# --- M15: limite de grupos e contato (ADR-0018) ------------------------------------------------
+# --- M15: limite de grupos (ADR-0018) ------------------------------------------------
 
 
 def test_max_groups_padrao_e_configuravel(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -211,18 +177,6 @@ def test_max_groups_rejeita_valor_negativo(monkeypatch: pytest.MonkeyPatch) -> N
 
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
-
-
-def test_contact_email_tem_padrao_e_vazio_volta_ao_padrao(monkeypatch: pytest.MonkeyPatch) -> None:
-    _com_env(monkeypatch)
-    padrao = Settings(_env_file=None).contact_email
-    assert "@" in padrao
-
-    monkeypatch.setenv("CONTACT_EMAIL", "ajuda@exemplo.com")
-    assert Settings(_env_file=None).contact_email == "ajuda@exemplo.com"
-
-    monkeypatch.setenv("CONTACT_EMAIL", "  ")
-    assert Settings(_env_file=None).contact_email == padrao
 
 
 def test_eh_dono_aceita_a_variacao_do_nono_digito(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -306,9 +260,7 @@ def test_opcionais_numericas_vazias_no_env_usam_o_padrao(monkeypatch: pytest.Mon
         TIMEOUT_MARCACAO_HORAS="  ",
         MAX_GROUPS="",
         GROUP_PREFIX="",
-        CONTACT_EMAIL="",
         OWNER_NUMBER="",
-        ALLOWED_NUMBERS="",
         ALLOWED_GROUPS="",
     )
 

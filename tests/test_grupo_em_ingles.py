@@ -63,14 +63,6 @@ async def test_turma_avancada_so_ve_ingles(nivel: str) -> None:
     assert entrada.sentido.traducao == "travar, emperrar"  # segue gravada
 
 
-async def test_privado_b1_b2_continua_com_o_portugues() -> None:
-    m = _turma("B1-B2")
-
-    (card, *_) = await m.diz("stall")
-
-    assert "🇧🇷 travar, emperrar" in card
-
-
 def test_lista_corta_definicao_longa_so_em_ingles() -> None:
     from app.domain.models import Entry, SentidoSalvo
 

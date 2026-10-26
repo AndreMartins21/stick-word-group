@@ -25,7 +25,6 @@ from tests.helpers import eventos, explicacao_stall
 
 FIXTURES = Path(__file__).parent / "fixtures"
 CHAT_ALLOWED = "5531999998888@c.us"
-CHAT_OUTRO_ALUNO = "5521977776666@c.us"
 
 
 async def _sem_espera(_: float) -> None:
@@ -48,12 +47,10 @@ def cliente(fake_channel: FakeChannel) -> Iterator[TestClient]:
     settings = Settings(
         _env_file=None,
         ALLOWED_NUMBER="5531999998888",
-        ALLOWED_NUMBERS="5521977776666",
         ALLOWED_GROUPS="120363000000000099@g.us",
         BOT_NUMBER="5531988887777",
         WAHA_API_KEY="fake-local-key",
         GCP_PROJECT_ID="meu-projeto-local",
-        EXPORT_BUCKET="meu-projeto-vocabot-exports",
     )
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_channel] = lambda: fake_channel
@@ -84,7 +81,7 @@ def test_mensagem_de_texto_marca_como_lida_e_e_recebida(
     assert len(fake_channel.textos_enviados) == 1
     chat_id, texto = fake_channel.textos_enviados[0]
     assert chat_id == CHAT_ALLOWED
-    assert "stall" in texto
+    assert "Admin commands" in texto  # o dono no privado: só os comandos de admin (ADR-0062)
 
 
 def test_mensagem_de_texto_registra_mensagem_recebida_sem_o_numero(
@@ -114,7 +111,7 @@ def test_mensagem_de_grupo_e_ignorada(cliente: TestClient, fake_channel: FakeCha
     assert fake_channel.vistos == []
 
 
-def test_midia_responde_que_so_entende_texto(
+def test_midia_do_dono_recebe_a_lista_de_comandos_de_admin(
     cliente: TestClient, fake_channel: FakeChannel
 ) -> None:
     resposta = cliente.post("/waha/webhook", json=_fixture("midia"))
@@ -124,28 +121,17 @@ def test_midia_responde_que_so_entende_texto(
     assert len(fake_channel.textos_enviados) == 1
     chat_id, texto = fake_channel.textos_enviados[0]
     assert chat_id == CHAT_ALLOWED
-    assert "text" in texto.lower()
+    assert "Admin commands" in texto
 
 
-def test_numero_sem_plano_recebe_so_o_aviso_e_nada_e_processado(
+def test_numero_que_nao_e_admin_e_ignorado_em_silencio(
     cliente: TestClient, fake_channel: FakeChannel
 ) -> None:
     resposta = cliente.post("/waha/webhook", json=_fixture("numero_nao_autorizado"))
 
     assert resposta.status_code == 200
     assert fake_channel.vistos == []
-    ((chat, texto),) = fake_channel.textos_enviados
-    assert chat == "5511888887777@c.us"
-    assert "You don't have a plan" in texto
-
-
-def test_numero_sem_plano_registra_evento(
-    cliente: TestClient, caplog: pytest.LogCaptureFixture
-) -> None:
-    with caplog.at_level(logging.INFO):
-        cliente.post("/waha/webhook", json=_fixture("numero_nao_autorizado"))
-
-    assert len(eventos(caplog.records, "numero_sem_plano")) == 1
+    assert fake_channel.textos_enviados == []
 
 
 def test_lid_resolvido_para_numero_permitido_e_processado(
@@ -235,7 +221,7 @@ def test_mensagem_com_destino_nulo_mas_com_texto_e_processada(
 
     assert resposta.status_code == 200
     assert fake_channel.vistos == [CHAT_ALLOWED]
-    assert "Commands" in fake_channel.textos_enviados[0][1]  # respondeu ao /ajuda
+    assert "Admin commands" in fake_channel.textos_enviados[0][1]  # respondeu ao /ajuda
 
 
 def test_payload_malformado_devolve_200_e_registra_o_motivo(
@@ -306,23 +292,6 @@ def test_health_continua_respondendo_sem_dependencias(cliente: TestClient) -> No
 # --- M14: vários alunos, grupo não autorizado, aviso de erro só para quem escreveu -------------
 
 
-def _de_outro_aluno(nome: str = "texto") -> dict[str, Any]:
-    evento = _fixture(nome)
-    evento["payload"]["id"] = "true_5521977776666@c.us_OUTRO0001"
-    evento["payload"]["from"] = CHAT_OUTRO_ALUNO
-    return evento
-
-
-def test_segundo_aluno_da_lista_e_atendido_no_proprio_chat(
-    cliente: TestClient, fake_channel: FakeChannel
-) -> None:
-    resposta = cliente.post("/waha/webhook", json=_de_outro_aluno())
-
-    assert resposta.status_code == 200
-    assert fake_channel.vistos == [CHAT_OUTRO_ALUNO]
-    assert [chat for chat, _ in fake_channel.textos_enviados] == [CHAT_OUTRO_ALUNO]
-
-
 def test_grupo_nao_autorizado_tem_o_id_logado_uma_vez_por_processo(
     cliente: TestClient, fake_channel: FakeChannel, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -350,7 +319,7 @@ def test_falha_ao_processar_avisa_so_o_chat_de_quem_escreveu(
 
     monkeypatch.setattr(fake_channel, "send_seen", quebra)
 
-    resposta = cliente.post("/waha/webhook", json=_de_outro_aluno())
+    resposta = cliente.post("/waha/webhook", json=_fixture("texto"))
 
     assert resposta.status_code == 200
-    assert fake_channel.textos_enviados == [(CHAT_OUTRO_ALUNO, messages.ERRO_INESPERADO)]
+    assert fake_channel.textos_enviados == [(CHAT_ALLOWED, messages.ERRO_INESPERADO)]
