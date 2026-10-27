@@ -72,6 +72,7 @@ operacional: numeração, status e o índice.
 | [0060](0060-ranking-em-pdf-e-nome-do-grupo-no-activate.md) | Ranking em PDF (Jinja2 + WeasyPrint) e nome do grupo no `!activate` | Aceito | 2026-10-23 |
 | [0061](0061-ranking-mostra-numero-e-nome-salvo.md) | O PDF do ranking mostra o número e o nome salvo do aluno (substitui a decisão 7 do ADR-0056) | Aceito | 2026-10-23 |
 | [0062](0062-separacao-em-stick-word-e-stick-word-group.md) | Separar o projeto em stick-word (individual) e stick-word-group (turmas) | Aceito | 2026-10-26 |
+| [0063](0063-infra-em-terraform-e-projeto-gcp-proprio.md) | Infra em Terraform, num projeto GCP próprio (stick-word-group), sem o nome vocabot | Aceito | 2026-10-27 |
 
 ## Quando escrever um
 

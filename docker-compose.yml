@@ -1,10 +1,10 @@
-# Vocabot na VM e2-micro (seção 10.7 da spec): 1 GB de RAM, por isso os limites de memória.
+# stick-word-group na VM e2-micro (seção 10.7 da spec): 1 GB de RAM, por isso os limites de memória.
 #
 # Uso na VM (o infra/deploy.sh faz isto):
-#   cd /opt/vocabot/app && docker compose --env-file /opt/vocabot/.env up -d --build
+#   cd /opt/stick-word-group/app && docker compose --env-file /opt/stick-word-group/.env up -d --build
 # Validação sem segredos (é o que a CI roda):
 #   docker compose --env-file .env.example config --quiet
-name: vocabot
+name: stick-word-group
 
 services:
   waha:
@@ -51,7 +51,7 @@ services:
     # `required: false` deixa o `docker compose config` validar sem ele; sem o .env o bot
     # recusa subir com uma mensagem clara de configuração faltando.
     env_file:
-      - path: ${VOCABOT_ENV_FILE:-/opt/vocabot/.env}
+      - path: ${STICK_WORD_GROUP_ENV_FILE:-/opt/stick-word-group/.env}
         required: false
     environment:
       APP_ENV: prod

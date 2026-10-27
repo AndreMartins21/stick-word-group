@@ -1,12 +1,12 @@
 # Runbook: sessão do WhatsApp caída ou número banido
 
-O Vocabot usa o WAHA/GOWS, uma API **não oficial** do WhatsApp (contra os Termos de Serviço): o número
+O stick-word-group usa o WAHA/GOWS, uma API **não oficial** do WhatsApp (contra os Termos de Serviço): o número
 pode ser banido ou deslogado a qualquer momento. Este roteiro diz o que fazer, na ordem. Decisão e
 motivos: ADR-0054.
 
 ## 1. Sinais
 
-- **E-mail do alerta** `vocabot-sessao-whatsapp-caiu` (criado por `infra/setup_alerta_sessao.sh`): o
+- **E-mail do alerta** `stick-word-group-sessao-whatsapp-caiu` (criado por `infra/setup_alerta_sessao.sh`): o
   `waha_status` chegou a `FAILED`, `STOPPED` ou `SCAN_QR_CODE`.
 - Alunos dizem que o bot parou de responder.
 - `infra/logs.sh` ou o Cloud Logging mostram `waha_status` com `ok=false`.
@@ -18,7 +18,7 @@ Um `STOPPED` isolado logo depois de um deploy é normal (o container reinicia e 
 
 1. Veja o estado: `bash infra/logs.sh` (procure `waha_status`) ou abra o painel do WAHA com
    `bash infra/pair.sh` e olhe a sessão `default`.
-2. Reinicie só o WAHA: `bash infra/ssh.sh` → `cd /opt/vocabot && sudo docker compose restart waha`.
+2. Reinicie só o WAHA: `bash infra/ssh.sh` → `cd /opt/stick-word-group && sudo docker compose restart waha`.
 3. Voltou a `WORKING`? Era instabilidade. Pare aqui.
 4. Pediu QR (`SCAN_QR_CODE`)? Tente **re-parear o mesmo número** (passo 3A).
 5. O WhatsApp no celular do bot mostra "número banido", "conta bloqueada" ou não deixa parear? É ban
@@ -54,7 +54,7 @@ banido mais rápido.
 
 ### Modelo de aviso às turmas
 
-> Olá, turma! O número do Vocabot mudou: salvem o novo contato (+55 …). Tudo o que vocês já
+> Olá, turma! O número do stick-word-group mudou: salvem o novo contato (+55 …). Tudo o que vocês já
 > estudaram continua salvo. Se não me vir no grupo, me avisem por aqui. 🙌
 
 ## 4. Depois

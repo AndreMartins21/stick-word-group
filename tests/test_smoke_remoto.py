@@ -22,7 +22,7 @@ case "$*" in
     restantes="$(cat "$falhas")"
     if (( restantes > 0 )); then echo $((restantes - 1)) > "$falhas"; exit 1; fi
     echo '{"ok":true}' ;;
-  *" ps"*) echo "NAME  STATUS"; echo "vocabot-bot-1  Up (healthy)" ;;
+  *" ps"*) echo "NAME  STATUS"; echo "stick-word-group-bot-1  Up (healthy)" ;;
 esac
 """
 
@@ -56,10 +56,10 @@ def _rodar(
     espera: int = _PRAZO_FOLGADO,
 ) -> subprocess.CompletedProcess[str]:
     fake = tmp_path / "fake"
-    vocabot = tmp_path / "vocabot"
+    raiz = tmp_path / "stick-word-group"
     (fake / "bin").mkdir(parents=True)
-    (vocabot / "app").mkdir(parents=True)
-    (vocabot / ".env").write_text(f"WAHA_API_KEY={CHAVE}\nOUTRA=x\n", encoding="utf-8")
+    (raiz / "app").mkdir(parents=True)
+    (raiz / ".env").write_text(f"WAHA_API_KEY={CHAVE}\nOUTRA=x\n", encoding="utf-8")
     (fake / "bot_falhas").write_text(str(bot_falhas))
     (fake / "waha_falhas").write_text(str(waha_falhas))
     (fake / "waha_status").write_text(status)
@@ -70,7 +70,7 @@ def _rodar(
         **os.environ,
         "PATH": f"{fake / 'bin'}:{os.environ['PATH']}",
         "FAKE": str(fake),
-        "VOCABOT_DIR": str(vocabot),
+        "STICK_WORD_GROUP_DIR": str(raiz),
         "ESPERA_MAXIMA": str(espera),
     }
     # roda o script FIXO do próprio repositório, com binários falsos: nada de entrada não confiável

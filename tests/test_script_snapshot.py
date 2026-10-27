@@ -11,7 +11,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-PROJETO = "vocabot-teste-snapshot"
+PROJETO = "stick-word-group-teste-snapshot"
 
 
 @pytest.fixture

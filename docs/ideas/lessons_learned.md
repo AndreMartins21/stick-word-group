@@ -55,7 +55,7 @@ do "o que deu errado e por quê".
 - **Como diagnosticar sem adivinhar:** comparar o hash da senha do container com a do Secret Manager (mesmo
   hash), testar o login de dentro da VM (funcionou) e ver quem escuta na porta local (`ss -ltnp`).
 
-### `/opt/vocabot` é modo 700
+### `/opt/stick-word-group` é modo 700
 - O render do `.env` roda com `umask 077`, então só root entra no diretório. `cd` sem `sudo` falhava
   ("Permission denied"). Comandos remotos rodam inteiros sob `sudo bash -s`.
 

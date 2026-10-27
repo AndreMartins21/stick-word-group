@@ -67,7 +67,7 @@ Como o áudio é gerado:
 
 1. O bot normaliza o texto (sem os `[[ ]]` que marcam a palavra-alvo, espaços colapsados, caixa mantida)
    e calcula o nome do arquivo: `audio/<voz>/<sha256 de voz + texto>.ogg`.
-2. **Cache hit:** lê esse objeto do bucket `${PROJECT_ID}-vocabot-audio` e não chama o TTS.
+2. **Cache hit:** lê esse objeto do bucket `${PROJECT_ID}-audio` e não chama o TTS.
    **Cache miss:** sintetiza no Google Cloud Text-to-Speech (voz `en-US-Neural2-F`, formato OGG/Opus),
    grava no bucket e devolve o áudio. O cache é compartilhado entre alunos: um termo é sintetizado uma vez só.
 3. O áudio segue para o WhatsApp como nota de voz (`POST /api/sendVoice` do WAHA, base64, sem
@@ -76,11 +76,11 @@ Como o áudio é gerado:
 
 Operação:
 
-- **Configuração:** `AUDIO_BUCKET` (padrão `${PROJECT_ID}-vocabot-audio`; vazio ou fora de
+- **Configuração:** `AUDIO_BUCKET` (padrão `${PROJECT_ID}-audio`; vazio ou fora de
   `APP_ENV=prod`, a pronúncia fica indisponível) e `TTS_VOICE` (padrão `en-US-Neural2-F`). Trocar a voz
   gera arquivos novos no cache; os antigos ficam no bucket.
-- **Ativar num projeto novo:** `infra/setup.sh` habilita `texttospeech.googleapis.com`, cria o bucket
-  (privado, **sem** ciclo de vida) e dá `objectAdmin` só nele à conta da VM.
+- **Ativar num projeto novo:** o Terraform (`infra/terraform`) habilita `texttospeech.googleapis.com`,
+  cria o bucket (privado, **sem** ciclo de vida) e dá `objectAdmin` só nele à conta da VM.
   Sem isso, o log do bot mostra `403 SERVICE_DISABLED` ou erro de bucket e o aluno vê "I couldn't make
   the audio right now".
 - **Custo:** cota gratuita mensal de 1M de caracteres em Neural2 (4M em Standard/WaveNet). Um termo ou
@@ -93,18 +93,25 @@ Contrato: seção 7.4 da spec.
 
 ## Deploy (runbook)
 
-Pré-requisitos: `gcloud` autenticado, projeto com faturamento, papel de Owner, e o número do bot
-(chip com WhatsApp Business) à mão. **Nada abaixo roda sozinho:** cada script que cria algo pergunta
-antes, e `DRY_RUN=1` só mostra os comandos.
+Pré-requisitos: `gcloud` autenticado (e `gcloud auth application-default login`, que o Terraform
+usa), Terraform ≥ 1.11, projeto com faturamento, papel de Owner, e o número do bot (chip com
+WhatsApp Business) à mão. Toda a infra está em [`infra/terraform`](infra/terraform) (ADR-0063):
+mudar de projeto é trocar o `project_id` e aplicar de novo.
 
 ```bash
+cp infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars  # project_id, billing_account, alerta_email
+make tf-bootstrap   # bucket do estado do Terraform (<projeto>-tfstate), uma vez por projeto
+make tf-init
+make tf-plan        # revisar o que será criado
+make tf-apply       # APIs, Firestore (TTL + PITR), contas de serviço, buckets, segredos, firewall, VM, WIF, alertas
 cp infra/.env.infra.example infra/.env.infra   # preencha GCP_PROJECT_ID, ALLOWED_NUMBER, BOT_NUMBER
-DRY_RUN=1 bash infra/setup.sh   # revisar o que será criado (só as leituras rodam)
-bash infra/setup.sh             # APIs, Firestore + TTL, conta de serviço, bucket de áudio, segredos, firewall, VM
 bash infra/deploy.sh            # empacota, copia via IAP, renderiza o .env na VM e sobe o compose
 bash infra/pair.sh              # túnel (porta local 13000) p/ o painel do WAHA: escaneie o QR com o número do bot
 bash infra/smoke_test.sh        # bot em /health e sessão do WAHA em WORKING
 ```
+
+Os segredos do WAHA são gerados pelo próprio Terraform e vão direto para o Secret Manager, sem passar
+pela tela nem pelo estado (`secret_data_wo`). Rotacionar: aumente `versao_segredos` e aplique.
 
 Depois: mande `/ajuda` do seu WhatsApp pessoal para o número do bot.
 
@@ -114,14 +121,14 @@ Depois: mande `/ajuda` do seu WhatsApp pessoal para o número do bot.
 | entrar na VM | `bash infra/ssh.sh` |
 | atualizar o código | `bash infra/deploy.sh` (o WAHA e a sessão não são recriados) |
 | ver a senha do painel | `gcloud secrets versions access latest --secret=WAHA_DASHBOARD_PASSWORD` (só quando você quiser) |
-| chave da Anthropic (opcional) | `LLM_PROVIDER=anthropic bash infra/setup.sh` e depois `bash infra/secrets.sh` |
+| chave da Anthropic (opcional) | `llm_provider = "anthropic"` no `terraform.tfvars`, `make tf-apply` e depois `bash infra/secrets.sh` |
 
 Notas de operação:
 
 - **Custo:** `e2-micro` + disco standard de 30 GB em `us-central1` são gratuitos; o IP externo
   efêmero custa até ~US$ 3,60/mês (confira na fatura, SKU "External IP Charge on a Standard VM") e o
-  Gemini é pago por uso (centavos neste volume). Crie um alerta de orçamento em Billing → Budgets
-  antes do primeiro deploy. O IP existe só para a VM **sair** para a internet — nada entra nela.
+  Gemini é pago por uso (centavos neste volume). O Terraform cria o Budget com alertas (com
+  `billing_account` preenchido). O IP existe só para a VM **sair** para a internet — nada entra nela.
   Alternativas gratuitas (casa, Oracle) e o porquê de ficarmos na GCP estão no
   [ADR-0008](docs/adr/0008-continuar-na-gcp-e-manter-a-saida-portavel.md); **revisitar antes de os
   créditos do trial acabarem**.
@@ -152,19 +159,15 @@ silêncio, e o bot **sai dele depois de 24 h**. No celular do bot, configure Pri
 
 ## Deploy contínuo (M11, ADR-0013)
 
-Depois do `infra/setup.sh` inicial, `infra/deploy.sh` também roda sozinho: todo merge na `main`
+Depois da infra criada, `infra/deploy.sh` também roda sozinho: todo merge na `main`
 (que só acontece via PR com o CI verde — branch protection) dispara o job `deploy` do
 `.github/workflows/ci.yml`, que faz o deploy e roda o smoke test. Sem chave de conta de serviço:
-autenticação por Workload Identity Federation.
+autenticação por Workload Identity Federation, criada em `infra/terraform/cicd.tf`.
 
-```bash
-DRY_RUN=1 bash infra/setup_cicd.sh   # revisar o que será criado
-bash infra/setup_cicd.sh             # WIF pool/provider + conta de serviço vocabot-deploy
-```
-
-O próprio script imprime, no fim, o que configurar no GitHub (Settings → Secrets and variables →
-Actions: `ALLOWED_NUMBER`/`BOT_NUMBER` e, opcionais, `ALLOWED_NUMBERS`/`ALLOWED_GROUPS`/`OWNER_NUMBER` como Secrets, o resto como Variables) e lembra de ativar a
-branch protection da `main`.
+No GitHub (Settings → Secrets and variables → Actions): `GCP_PROJECT_ID` e `GCP_WIF_PROVIDER`
+(`terraform output github_variables`), `LLM_PROVIDER`, `GEMINI_MODEL`, `GEMINI_MODEL_EVAL`,
+`USER_LEVEL` e `TIMEZONE` como Variables; `ALLOWED_NUMBER`/`BOT_NUMBER` e, opcionais,
+`ALLOWED_GROUPS`/`OWNER_NUMBER` como Secrets. E a branch protection da `main` ativa.
 
 ## Segurança
 

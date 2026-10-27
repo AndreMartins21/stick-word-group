@@ -29,7 +29,7 @@ from app.repo.base import Banco, EntradaJaExiste, Repository, resolver_slug
 from app.repo.memory import MemoryBanco
 
 T0 = datetime(2026, 9, 20, 12, 0, tzinfo=UTC)
-PROJETO_TESTE = "vocabot-teste"
+PROJETO_TESTE = "stick-word-group-teste"
 
 
 def _entrada(
@@ -178,8 +178,8 @@ def test_entrada_persiste_os_links_do_audio_de_pronuncia(repo: Repository) -> No
 
     com_audio = _entrada().model_copy(
         update={
-            "audio_palavra": "gs://proj-vocabot-audio/audio/en-US-Neural2-F/a.ogg",
-            "audio_exemplo": "gs://proj-vocabot-audio/audio/en-US-Neural2-F/b.ogg",
+            "audio_palavra": "gs://proj-audio/audio/en-US-Neural2-F/a.ogg",
+            "audio_exemplo": "gs://proj-audio/audio/en-US-Neural2-F/b.ogg",
         }
     )
     repo.salvar_entrada(com_audio)

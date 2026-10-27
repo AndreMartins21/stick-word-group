@@ -218,7 +218,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await canal.aclose()
 
 
-app = FastAPI(title="vocabot", lifespan=_lifespan)
+app = FastAPI(title="stick-word-group", lifespan=_lifespan)
 
 
 def get_channel(request: Request) -> ChannelComLid:

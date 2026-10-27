@@ -38,9 +38,9 @@ Estas skills carregam sozinhas quando o contexto pede; invoque explicitamente se
 | `adr` | decidir entre alternativas técnicas, mudar/substituir uma decisão, registrar o porquê |
 | `tdd` | nova lógica de negócio, correção de bug (teste que reproduz primeiro) |
 | `python-best-practices` | escrever/revisar código Python |
-| `gcp-best-practices` | scripts em `infra/`, comandos `gcloud`, IAM, custos, deploy |
+| `gcp-best-practices` | Terraform e scripts em `infra/`, comandos `gcloud`, IAM, custos, deploy |
 | `git-workflow` | commits, branches, PRs, limpeza de histórico |
-| `git-deploy-workflow` | commit/PR/merge neste repo (main protegida), `ci.yml`, `infra/setup_cicd.sh`, depurar o deploy automático |
+| `git-deploy-workflow` | commit/PR/merge neste repo (main protegida), `ci.yml`, `infra/terraform/cicd.tf`, depurar o deploy automático |
 
 `sdd`, `adr`, `gcp-best-practices` e `git-deploy-workflow` são do projeto (`.claude/skills/`); as
 demais são globais do usuário.
@@ -56,6 +56,7 @@ make evals    # taxa de acerto da avaliação de frases contra a API real (custa
 make fmt      # formata e corrige lint
 make run      # API local em :8000
 make sim      # simulador de terminal (sem WhatsApp)
+make tf-plan  # infra (infra/terraform): tf-bootstrap, tf-init, tf-plan, tf-apply
 ```
 
 O gerenciador de pacotes é o **uv**. Não use `pip install` direto nem crie `requirements.txt`:
@@ -67,7 +68,7 @@ dependências entram no `pyproject.toml` (`uv add <pacote>`).
 app/       código da aplicação (main, channel/, domain/, flows/, services/, repo/)
 sim/       simulador de terminal
 evals/     avaliação de qualidade dos modelos (fora do pytest)
-infra/     scripts de GCP (idempotentes, shellcheck limpo)
+infra/     terraform/ (toda a infra GCP, ADR-0063) + scripts de operação (shellcheck limpo)
 tests/     pytest + fixtures de payloads
 docs/adr/  decisões arquiteturais
 spec/      especificação do projeto

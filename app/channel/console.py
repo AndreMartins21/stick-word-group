@@ -58,7 +58,7 @@ class ConsoleChannel:
             if numero in self._nomes:
                 text = text.replace(f"@{numero}", f"@{self._nomes[numero]}")
         corpo = "\n".join(f"│ {linha}" if linha else "│" for linha in text.splitlines())
-        self._saida(f"┌─ 🤖 vocabot\n{corpo}\n└─")
+        self._saida(f"┌─ 🤖 stick-word-group\n{corpo}\n└─")
 
     async def send_seen(self, chat_id: str) -> None:  # noqa: ARG002
         return None

@@ -11,6 +11,6 @@ case "${1:-}" in
   *) echo "Uso: bash infra/logs.sh [waha|bot]" >&2; exit 1 ;;
 esac
 
-# O /opt/vocabot é modo 700 (só root), então o comando inteiro roda sob sudo.
+# O /opt/stick-word-group é modo 700 (só root), então o comando inteiro roda sob sudo.
 exec gcloud compute ssh "$VM_NAME" "${SSH_FLAGS[@]}" --command \
-  "sudo bash -c 'cd /opt/vocabot/app && docker compose --env-file /opt/vocabot/.env logs -f --tail=200 $servico'"
+  "sudo bash -c 'cd /opt/stick-word-group/app && docker compose --env-file /opt/stick-word-group/.env logs -f --tail=200 $servico'"

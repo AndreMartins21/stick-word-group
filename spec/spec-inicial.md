@@ -1,4 +1,4 @@
-# CLAUDE.md — Vocabot (MVP, versão WAHA + Gemini no Vertex AI)
+# CLAUDE.md — stick-word-group (MVP, versão WAHA + Gemini no Vertex AI)
 
 Este arquivo é a especificação do projeto. Leia-o inteiro antes de escrever código. Trabalhe **marco a marco** (seção 9), pare ao fim de cada um para eu revisar e só avance quando eu aprovar.
 
@@ -57,7 +57,7 @@ A VM tem só 1 GB de RAM. Crie um **swap de 2 GB**, limite a memória dos contai
 
 ## 3. Regras de trabalho para você (Claude Code)
 
-1. **Nunca peça, leia, imprima ou grave valores de segredos.** Com o Vertex AI, não há chave de IA. Se um dia eu usar a Anthropic, a chave entra pelo `infra/secrets.sh`, que eu rodo em outro terminal. Os segredos internos (API key e senha do painel do WAHA) são gerados pelo `setup.sh` com `openssl rand` e vão direto para o Secret Manager, **sem** aparecer na tela.
+1. **Nunca peça, leia, imprima ou grave valores de segredos.** Com o Vertex AI, não há chave de IA. Se um dia eu usar a Anthropic, a chave entra pelo `infra/secrets.sh`, que eu rodo em outro terminal. Os segredos internos (API key e senha do painel do WAHA) são gerados pelo Terraform (recurso efêmero + `secret_data_wo`, seção 10.1) e vão direto para o Secret Manager, **sem** aparecer na tela nem no estado.
 2. Antes de rodar qualquer comando `gcloud` ou `ssh` que **crie, altere ou apague** algo, mostre o comando e espere eu aprovar. Comandos de leitura podem rodar direto.
 3. Scripts de `infra/` precisam ser **idempotentes**.
 4. Confira na documentação atual do WAHA (waha.devlike.pro) os nomes exatos de: variáveis de ambiente (API key, painel, webhook, engine, reinício automático de sessões), endpoints (`sendText`, `sendSeen`, `startTyping`/`stopTyping`, status da sessão, QR) e o formato do payload do evento `message`. Fixe a **versão da imagem** (tag) no compose, sem usar `latest`. Confira também, na documentação do Vertex AI e do SDK `google-genai`: o **ID do modelo Gemini Flash (ou Flash-Lite) atual e GA**, se ele exige `location=global`, qual método da SDK usar (`generate_content` ou a Interactions API, conforme o modelo) e como pedir saída estruturada (JSON com schema). **Não use a família Gemini 2.5**, que está com aposentadoria marcada para outubro/2026. Deixe o que puder configurável.
@@ -94,7 +94,7 @@ A VM tem só 1 GB de RAM. Crie um **swap de 2 GB**, limite a memória dos contai
 | `BOT_NUMBER` | `.env.infra` | Número Vivo do bot, só dígitos (informativo/logs) |
 | `WAHA_URL` | compose | `http://waha:3000` |
 | `WAHA_SESSION` | compose | `default` |
-| `AUDIO_BUCKET` | `.env.infra` (opcional) | Bucket do cache de áudio de pronúncia (M23). Padrão `${PROJECT_ID}-vocabot-audio`; vazio ou fora de `APP_ENV=prod`, a pronúncia fica indisponível |
+| `AUDIO_BUCKET` | `.env.infra` (opcional) | Bucket do cache de áudio de pronúncia (M23). Padrão `${PROJECT_ID}-audio`; vazio ou fora de `APP_ENV=prod`, a pronúncia fica indisponível |
 | `TTS_VOICE` | `.env.infra` (opcional) | Voz do Cloud TTS (M23). Padrão `en-US-Neural2-F` |
 | `ANTHROPIC_MODEL` | `.env.infra` (opcional) | Padrão `claude-haiku-4-5-20251001` |
 | `USER_LEVEL` | `.env.infra` | Padrão `B1-B2` |
@@ -704,6 +704,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M61 | `!group` rotula admin como `admin` (seção 5.2b, ADR-0059): `Deps.eh_admin`; `!student` num admin responde `papel_alterado_admin` | `make check` passa; `!group` mostra `(admin)` para dono e admins e `(teacher)` só para professores; `!student` num admin avisa que ele continua admin |
 | M62 | `/ranking` em PDF e nome do grupo (seções 5.2/7.1, ADR-0060): `services/relatorio_ranking.py` + `templates/ranking.html.j2` (Jinja2 + WeasyPrint), `admin.Arquivo`, `!activate <nome>` grava/renomeia (`Repository.renomear_grupo`), `group_name` aceita `Name` do GOWS, pango no Dockerfile | `make check` passa; `/ranking` manda um `.pdf` com o nome real das turmas; `!activate Turma A` num grupo ativo renomeia; `docker build` importa o WeasyPrint |
 | M63 | Ranking mostra número e nome salvo, sem Daily/Weekly (seção 5.2, ADR-0061): `LinhaAluno.numero`, coluna "Number" no PDF | `make check` passa; o PDF traz o nome (ou "—") e o `+número` de cada aluno, sem as colunas Daily e Weekly |
+| M64 | Infra em Terraform e projeto GCP próprio `stick-word-group` (seção 10, ADR-0063): `infra/terraform/` substitui os `infra/setup*.sh`; recursos renomeados de `vocabot`/`anki-whatsapp` para `stick-word-group` | `terraform validate` passa; `terraform plan` logo após o `apply` não mostra mudanças; o estado não contém valor de segredo; `make check` passa |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 
@@ -711,14 +712,37 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 
 Pré-requisitos, que eu garanto: `gcloud` autenticado, projeto definido, faturamento ativo (trial) e papel de Owner.
 
-### 10.1 `infra/config.sh` + `infra/.env.infra` (no `.gitignore`, com `.env.infra.example`)
-Contém `GCP_PROJECT_ID` (lido do `.env.infra`; se vazio, de `gcloud config get-value project`), `REGION=us-central1`, `ZONE=us-central1-a`, `VM_NAME=vocabot-vm`, `SA_NAME=vocabot-vm`, `EXPORT_BUCKET=${PROJECT_ID}-vocabot-exports`, `AUDIO_BUCKET=${PROJECT_ID}-vocabot-audio`, `TTS_VOICE` e os valores não secretos da seção 4.
+### 10.1 Terraform (`infra/terraform/`, ADR-0063)
+**Toda** a infraestrutura é declarada em Terraform, com o estado remoto em `gs://<projeto>-tfstate`
+(versionado). Mudar de projeto GCP = `project_id` novo no `infra/terraform/terraform.tfvars` (não
+versionado; modelo em `terraform.tfvars.example`) + `make tf-bootstrap tf-init tf-apply`. Nenhum
+segredo entra no estado: os valores dos segredos do WAHA saem de um `ephemeral "random_password"`
+para `secret_data_wo` (argumento write-only).
+
+| Arquivo | Recursos |
+|---|---|
+| `main.tf` | APIs (`compute`, `firestore`, `secretmanager`, `storage`, `iap`, `iam`, `iamcredentials`, `sts`, `logging`, `monitoring`, **`aiplatform`**, **`texttospeech`**, `bigquery`, `billingbudgets`, `cloudresourcemanager`); Firestore nativo `(default)` em `us-central1` com PITR (M53) e proteção contra exclusão; TTL em `processed.expira_em` |
+| `iam.tf` | SA `stick-word-group-vm` com `roles/datastore.user`, `roles/logging.logWriter` e `roles/aiplatform.user` no projeto |
+| `storage.tf` | `stick-word-group-audio` (cache de pronúncia, sem ciclo de vida, `objectAdmin` só nele), `stick-word-group-metrics` (snapshot M28: `termos/` 30 dias, resto 400; `objectCreator` só nele) e o dataset `stick_word_group_metrics` (US) — os dois buckets com *uniform access* e prevenção de acesso público |
+| `secrets.tf` | `WAHA_API_KEY`, `WAHA_DASHBOARD_PASSWORD`, `WAHA_HOOK_HMAC_KEY` (gerados; rotação = aumentar `versao_segredos`) e, com `llm_provider = "anthropic"`, `ANTHROPIC_API_KEY` sem versão; `secretAccessor` por segredo (ADR-0007) |
+| `compute.tf` | firewall `allow-iap-ssh` (tcp:22 de `35.235.240.0/20`, só a tag `stick-word-group`; **nunca** 3000/8000); VM `stick-word-group-vm` (`e2-micro`, `us-central1-a`, Debian 12, `pd-standard` 30 GB, escopo `cloud-platform`, IP externo efêmero tier `STANDARD`, OS Login, `startup-script` = `infra/vm/startup.sh`); snapshot diário do disco, 7 dias (M53) |
+| `cicd.tf` | WIF e SA de deploy (seção 10.9) |
+| `monitoring.tf` | alerta de sessão caída (10.6b, só com `alerta_email`) e Budget mensal (10.8, só com `billing_account`) |
+
+`infra/vm/startup.sh` (idempotente, roda a cada boot): instala o Docker Engine e o plugin compose
+(se faltar), cria o swap de 2 GB (se faltar), cria `/opt/stick-word-group` e ativa o Docker no boot.
+
+### 10.2 `infra/config.sh` + `infra/.env.infra` (no `.gitignore`, com `.env.infra.example`)
+Usados só pelos scripts de operação (deploy, pair, logs, ssh, smoke). Contém `GCP_PROJECT_ID` (lido
+do `.env.infra`; se vazio, de `gcloud config get-value project`), `ZONE=us-central1-a`,
+`VM_NAME=stick-word-group-vm`, `AUDIO_BUCKET=${PROJECT_ID}-audio`,
+`METRICS_BUCKET=${PROJECT_ID}-metrics`, `TTS_VOICE` e os valores não secretos da seção 4 — os
+nomes precisam bater com os do Terraform.
 
 Exemplo de `infra/.env.infra.example`:
 ```dotenv
 GCP_PROJECT_ID=
 ALLOWED_NUMBER=      # número pessoal do usuário (o dono), só dígitos
-ALLOWED_NUMBERS=     # opcional (M14): alunos, separados por vírgula
 ALLOWED_GROUPS=      # opcional (M14): ids @g.us autorizados, separados por vírgula
 OWNER_NUMBER=        # opcional (M14): o dono; padrão o ALLOWED_NUMBER
 BOT_NUMBER=          # número Vivo do bot, só dígitos
@@ -729,29 +753,14 @@ VERTEX_LOCATION=global
 USER_LEVEL=B1-B2
 ```
 
-### 10.2 `infra/setup.sh` (idempotente)
-1. Ativar as APIs `compute`, `firestore`, `secretmanager`, `storage`, `iap`, `iamcredentials`, `logging`, **`aiplatform`** (Vertex AI) e **`texttospeech`** (M23).
-2. Criar o Firestore nativo em `us-central1` e a política de TTL em `processed.expira_em`.
-3. Criar a conta de serviço `vocabot-vm` com os papéis `roles/datastore.user`, `roles/secretmanager.secretAccessor`, `roles/logging.logWriter` e **`roles/aiplatform.user`**. Adicionar `roles/iam.serviceAccountTokenCreator` **na própria SA** (ADR-0007: o `secretAccessor` é concedido em cada segredo, não no projeto) e `roles/storage.objectAdmin` **só no bucket**.
-4. Criar o bucket (`us-central1`, *uniform access*, prevenção de acesso público) com ciclo de vida de 7 dias. **4b (M23):** criar também `$AUDIO_BUCKET` (mesmas proteções, **sem** ciclo de vida) com `roles/storage.objectAdmin` só nele para a SA da VM.
-5. Criar os segredos. `WAHA_API_KEY` e `WAHA_DASHBOARD_PASSWORD` são gerados com `openssl rand -hex 24` e enviados por pipe, sem ecoar na tela. `ANTHROPIC_API_KEY` só é criado (sem versão) se `LLM_PROVIDER=anthropic`.
-6. Criar a regra de firewall `allow-iap-ssh` (tcp:22 a partir de `35.235.240.0/20`, só para a tag `vocabot`). **Não** abrir as portas 3000 ou 8000.
-7. Criar a VM, se não existir:
-   - `e2-micro`, `us-central1-a`, Debian 12;
-   - boot disk `pd-standard` de 30 GB;
-   - SA `vocabot-vm` com escopo `cloud-platform`, tag `vocabot`;
-   - IP externo efêmero (necessário para saída à internet) e network tier `STANDARD`;
-   - `--metadata-from-file startup-script=infra/vm/startup.sh`.
-8. `infra/vm/startup.sh` (idempotente, roda a cada boot): instala o Docker Engine e o plugin compose (se faltar), cria o swap de 2 GB (se faltar), cria `/opt/vocabot` e ativa o Docker no boot.
-
 ### 10.3 `infra/secrets.sh` (opcional; quem roda sou eu, em outro terminal)
 Só é necessário com `LLM_PROVIDER=anthropic`. Pergunta `ANTHROPIC_API_KEY` com `read -rsp` e adiciona uma versão (`printf '%s' | gcloud secrets versions add --data-file=-`). Oferece pular se já existir.
 
 ### 10.4 `infra/deploy.sh`
 1. Empacotar o repo (`git archive` ou `tar`, sem `.git`, `.env*`, `tests/` e `evals/`) e copiar para a VM (`gcloud compute scp --tunnel-through-iap`).
 2. Na VM, por ssh:
-   - extrair em `/opt/vocabot/app`;
-   - **renderizar `/opt/vocabot/.env`** com `gcloud secrets versions access latest` para cada segredo, mais os valores não secretos, com `umask 077`;
+   - extrair em `/opt/stick-word-group/app`;
+   - **renderizar `/opt/stick-word-group/.env`** com `gcloud secrets versions access latest` para cada segredo, mais os valores não secretos, com `umask 077`;
    - rodar `docker compose up -d --build`.
 3. Mostrar `docker compose ps` e as últimas linhas de log (filtrando nada sensível).
 
@@ -769,7 +778,7 @@ Mostre também como ver a senha do painel **localmente e só quando eu pedir** (
 - `infra/smoke_test.sh`: pela VM (via `infra/vm/smoke_remoto.sh`), testa `GET /health` do bot e verifica se a sessão do WAHA está `WORKING`, **esperando** até 3 minutos por cada um: depois de um deploy que recria o WAHA, o GOWS demora para subir e reinicia algumas vezes.
 
 ### 10.6b Contingência do número (M56, ADR-0054)
-`infra/setup_alerta_sessao.sh` (idempotente, `DRY_RUN=1`, `ALERTA_EMAIL` obrigatório) cria o canal de e-mail e o alerta `vocabot-sessao-whatsapp-caiu`, baseado em log: `waha_status` com `motivo` `FAILED`, `STOPPED` ou `SCAN_QR_CODE`. O roteiro de resposta (re-parear x trocar pelo número reserva, `BOT_NUMBER`, aviso às turmas) está em `docs/runbooks/banimento-do-numero.md`.
+`infra/terraform/monitoring.tf` (com `alerta_email` preenchido no `terraform.tfvars`) cria o canal de e-mail e o alerta `stick-word-group-sessao-whatsapp-caiu`, baseado em log: `waha_status` com `motivo` `FAILED`, `STOPPED` ou `SCAN_QR_CODE`. O roteiro de resposta (re-parear x trocar pelo número reserva, `BOT_NUMBER`, aviso às turmas) está em `docs/runbooks/banimento-do-numero.md`.
 
 ### 10.7 `docker-compose.yml`
 - `waha`:
@@ -782,7 +791,7 @@ Mostre também como ver a senha do painel **localmente e só quando eu pedir** (
   - porta publicada **só em `127.0.0.1:3000`** (para o túnel);
   - `restart: unless-stopped`, `mem_limit: 400m`.
 - `bot`:
-  - build local, `env_file: /opt/vocabot/.env`, sem portas publicadas;
+  - build local, `env_file: /opt/stick-word-group/.env`, sem portas publicadas;
   - healthcheck em `/health`;
   - `restart: unless-stopped`, `mem_limit: 300m`.
 
@@ -791,7 +800,7 @@ A VM `e2-micro` com disco standard de 30 GB em `us-central1` está no nível gra
 
 **Limites no deploy (M49, ADR-0047):** `infra/deploy.sh` renderiza no `.env` da VM `MAX_CARACTERES`, `MAX_SEGUNDOS_AUDIO`, `LIMITE_*`, `ORCAMENTO_DIARIO_USD`, `MAX_FILA_POR_CHAT`, `MAX_PROCESSAMENTOS` e `GEMINI_THINKING_LEVEL`, vindos de GitHub Variables homônimas (opcionais; vazio usa o padrão).
 
-**Alertas de custo (M45, ADR-0043):** `infra/setup_orcamento.sh` cria o Budget `vocabot-mensal` (`ORCAMENTO_MENSAL_USD`, padrão 30) com alertas em 50/90/100%; só avisa, não corta.
+**Alertas de custo (M45, ADR-0043):** `infra/terraform/monitoring.tf` cria o Budget `stick-word-group-mensal` (`orcamento_mensal`, padrão 30, na moeda da conta de faturamento, `budget_moeda` = BRL) com alertas em 50/90/100%; só avisa, não corta.
 
 ### 10.9 Deploy contínuo via GitHub Actions (M11, ADR-0013)
 
@@ -800,18 +809,18 @@ Action é visível a qualquer pessoa — nada sensível pode aparecer em log.
 
 - **Branch protection na `main`:** exige PR (sem push direto) e os checks `checks`, `test` e
   `compose` do `ci.yml` como obrigatórios.
-- **`infra/setup_cicd.sh`** (idempotente, mesmo padrão de `setup.sh`): cria o Workload Identity
+- **`infra/terraform/cicd.tf`**: cria o Workload Identity
   Pool (`github-pool`) e o provider OIDC (`github-provider`, emissor
   `token.actions.githubusercontent.com`, *attribute condition* travada em
   `assertion.repository == 'AndreMartins21/stick-word-group' && assertion.ref == 'refs/heads/main'`);
-  cria a conta de serviço `vocabot-deploy` e concede `roles/compute.osAdminLogin` **só na instância
+  cria a conta de serviço `stick-word-group-deploy` e concede `roles/compute.osAdminLogin` **só na instância
   da VM**, mais `roles/iap.tunnelResourceAccessor` e `roles/compute.viewer` **no projeto** (nenhum
   dos dois funciona só na instância — `gcloud` rejeita o primeiro e o segundo falha o deploy real
   porque `compute.projects.get` só existe no escopo do projeto; como só existe uma VM neste
   projeto, na prática já fica restrito a ela — ver ADR-0013) e `roles/iam.serviceAccountUser` só
-  sobre a `vocabot-vm` (sem ele o SSH falha com `actAs`). Não concede nada direto em Secret
+  sobre a `stick-word-group-vm` (sem ele o SSH falha com `actAs`). Não concede nada direto em Secret
   Manager, Firestore, Storage ou Vertex — quem lê segredo continua sendo a VM —, mas root na VM
-  mais `serviceAccountUser` alcançam tudo que a `vocabot-vm` alcança: a proteção da `main` e a
+  mais `serviceAccountUser` alcançam tudo que a `stick-word-group-vm` alcança: a proteção da `main` e a
   attribute condition são a defesa real (ADR-0013).
 - **Job `deploy` em `.github/workflows/ci.yml`:** `needs: [checks, test, compose]`, só roda em
   `push` para `main`; autentica via `google-github-actions/auth` (WIF, sem chave), roda
@@ -827,7 +836,7 @@ Action é visível a qualquer pessoa — nada sensível pode aparecer em log.
 
 ## 11. Estrutura esperada
 ```
-vocabot/
+stick-word-group/
   CLAUDE.md  README.md  pyproject.toml  Dockerfile  docker-compose.yml
   .dockerignore  .gitignore  .env.example
   app/
@@ -842,9 +851,10 @@ vocabot/
   scripts/    migrar_multiusuario.py   # M14: raiz antiga -> espacos/{chat}
               snapshot.py                        # M28: snapshot de métricas sob demanda
   evals/      sentencas.yaml  roteamento.yaml  run.py
-  infra/      config.sh  setup.sh  secrets.sh  deploy.sh  pair.sh  logs.sh  ssh.sh  smoke_test.sh
-              setup_metricas.sh  lifecycle-metricas.json   # M28
-              .env.infra.example  vm/startup.sh
+  infra/      config.sh  secrets.sh  deploy.sh  pair.sh  logs.sh  ssh.sh  smoke_test.sh
+              .env.infra.example  vm/startup.sh  vm/render_e_subir.sh  vm/smoke_remoto.sh
+              terraform/  versions.tf  variables.tf  main.tf  iam.tf  storage.tf  secrets.tf
+                          compute.tf  cicd.tf  monitoring.tf  outputs.tf  terraform.tfvars.example
               bq/  espacos.json  pessoas.json  admins.json  termos.json
                    grupos_pendentes.json  firestore_uso.json  views/*.sql  # M28/M30
   tests/      fixtures/*.json  test_*.py

@@ -1,9 +1,9 @@
 ---
 name: git-deploy-workflow
-description: Fluxo de Git e deploy específico deste repositório desde o M11 — a main é protegida (PR obrigatório, sem push direto), o merge dispara o deploy sozinho via GitHub Actions com Workload Identity Federation, e há armadilhas já descobertas na configuração desse pipeline (papel do túnel IAP, nome dos status checks, versão do gh, classificador de permissão do Claude Code). Use SEMPRE que for commitar, abrir PR, mergear, mexer em .github/workflows/ci.yml, em infra/setup_cicd.sh, na branch protection da main, ou depurar por que um deploy automático não disparou.
+description: Fluxo de Git e deploy específico deste repositório desde o M11 — a main é protegida (PR obrigatório, sem push direto), o merge dispara o deploy sozinho via GitHub Actions com Workload Identity Federation, e há armadilhas já descobertas na configuração desse pipeline (papel do túnel IAP, nome dos status checks, versão do gh, classificador de permissão do Claude Code). Use SEMPRE que for commitar, abrir PR, mergear, mexer em .github/workflows/ci.yml, em infra/terraform/cicd.tf, na branch protection da main, ou depurar por que um deploy automático não disparou.
 ---
 
-# Git e deploy contínuo — vocabot
+# Git e deploy contínuo — stick-word-group
 
 ## O fluxo, desde o M11 (ADR-0013)
 
@@ -40,13 +40,13 @@ Sequência normal de trabalho:
   `compute.osAdminLogin` continua por instância sem problema
   (`gcloud compute instances add-iam-policy-binding`).
 - **SSH numa VM que roda como conta de serviço exige `roles/iam.serviceAccountUser` sobre essa
-  conta** (`gcloud iam service-accounts add-iam-policy-binding`, só sobre a `vocabot-vm`). Sem isso:
+  conta** (`gcloud iam service-accounts add-iam-policy-binding`, só sobre a `stick-word-group-vm`). Sem isso:
   `User does not have iam.serviceAccounts.actAs permission on the instance's service account`.
-  Consequência de segurança: `osAdminLogin` (root) + `serviceAccountUser` fazem a `vocabot-deploy`
-  alcançar tudo que a `vocabot-vm` alcança — a defesa é a attribute condition do provider WIF e a
+  Consequência de segurança: `osAdminLogin` (root) + `serviceAccountUser` fazem a `stick-word-group-deploy`
+  alcançar tudo que a `stick-word-group-vm` alcança — a defesa é a attribute condition do provider WIF e a
   branch protection da `main`, então nunca afrouxe nenhuma das duas.
 - **Cada permissão que falta só aparece rodando o deploy de verdade**, uma por vez (`compute.projects.get`,
-  depois `actAs`, ...). Não dá para validar o IAM só lendo: depois de mexer em `setup_cicd.sh`,
+  depois `actAs`, ...). Não dá para validar o IAM só lendo: depois de mexer em `infra/terraform/cicd.tf`,
   re-execute só o job falho com `gh api --method POST repos/OWNER/REPO/actions/runs/<id>/rerun-failed-jobs`.
 - **`required_status_checks.contexts` da branch protection precisa do *nome de exibição* do job**
   (o campo `name:` dentro do job no YAML), não da chave do job. Configurar `contexts: [checks, test,
@@ -54,18 +54,16 @@ Sequência normal de trabalho:
   tipagem e segredos"), e o PR fica com `mergeStateStatus: BLOCKED` para sempre, mesmo com os três
   checks verdes. Confira com `gh pr checks <n>` os nomes reais antes de configurar a proteção, ou
   compare com `gh api repos/OWNER/REPO/branches/main/protection --jq .required_status_checks`.
-- **O `gh` instalado é antigo (2.4.0, de 2022) e não tem `gh variable set`** (o subcomando `variable`
-  só existe a partir do gh 2.31). Use a API diretamente:
+- **`gh variable set` exige gh ≥ 2.31.** Num gh antigo, use a API:
   `gh api --method POST repos/OWNER/REPO/actions/variables -f name=NOME -f value=VALOR` (cai para
-  `--method PATCH .../actions/variables/NOME` se já existir). `gh secret set` funciona nessa versão
-  antiga sem problema.
+  `--method PATCH .../actions/variables/NOME` se já existir).
 - **Comandos `gcloud` e `gh pr merge` às vezes precisam ser rodados pelo próprio usuário**, mesmo
   read-only, dependendo da configuração de permissão da sessão — é esperado, não um erro a
   contornar. Peça para o usuário rodar com o prefixo `!` (ex.: `! gh pr merge 3 ...`) ou no terminal
   dele; ver golden rule 2 do CLAUDE.md sobre aprovação antes de comando que cria/altera/apaga algo.
 - **Um script com `read -r -p` (confirmação interativa) rodado via `!` não fica interativo** — ele
   captura a saída e some no prompt, deixando o script pendurado. Peça para o usuário rodar com a
-  resposta já encanada: `! printf 's\n' | bash infra/setup_cicd.sh`.
+  resposta já encanada (ex.: `! printf 's\n' | bash infra/secrets.sh`).
 - **Nunca leia `infra/.env.infra` diretamente** (além de ser a regra de ouro 1, o próprio sistema de
   permissão bloqueia `grep`/`cat` nesse arquivo). Para levar valores dele até o GitHub sem que a
   Claude os veja, peça para o usuário rodar um comando que faz `source` do arquivo localmente e
@@ -75,8 +73,8 @@ Sequência normal de trabalho:
 ## Onde cada coisa mora
 
 - Pipeline: `.github/workflows/ci.yml` (jobs `checks`, `test`, `compose`, `deploy`).
-- Provisionamento do CI/CD: `infra/setup_cicd.sh` (idempotente — WIF pool/provider + SA
-  `vocabot-deploy`), constantes em `infra/config.sh` (`GITHUB_REPO`, `WIF_POOL`, `WIF_PROVIDER`,
-  `DEPLOY_SA_*`).
+- Provisionamento do CI/CD: `infra/terraform/cicd.tf` (WIF pool/provider + SA
+  `stick-word-group-deploy`; o repositório confiável é `var.github_repo`). Os valores de
+  `GCP_PROJECT_ID`/`GCP_WIF_PROVIDER` saem de `terraform output github_variables` (ADR-0063).
 - Decisão e alternativas descartadas: `docs/adr/0013-deploy-continuo-via-github-actions.md`.
 - Contrato/critério de aceite: spec `10.9` e marco `M11`.

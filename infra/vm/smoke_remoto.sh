@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Roda NA VM, como root (o /opt/vocabot é modo 700); o infra/smoke_test.sh o envia por stdin.
+# Roda NA VM, como root (o /opt/stick-word-group é modo 700); o infra/smoke_test.sh o envia por stdin.
 # Confere que o bot responde no /health e que a sessão do WAHA está WORKING, **esperando** os dois:
 # depois de um deploy que recria o WAHA, o GOWS demora mais de 10 s para subir e reinicia algumas
 # vezes ("Connection reset by peer"), e o bot pode ainda estar reiniciando. Falhar na primeira
@@ -8,7 +8,7 @@
 # Lê a API key do .env da VM sem nunca imprimi-la. O sucesso só vale com o marcador SMOKE_OK.
 set -Eeuo pipefail
 
-DIR="${VOCABOT_DIR:-/opt/vocabot}"
+DIR="${STICK_WORD_GROUP_DIR:-/opt/stick-word-group}"
 ESPERA_MAXIMA="${ESPERA_MAXIMA:-180}"
 INTERVALO="${INTERVALO:-5}"
 

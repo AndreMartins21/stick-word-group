@@ -51,7 +51,7 @@ logs/
 # ---- Exportações e artefatos do bot ---------------------------------------
 exports/
 *.apkg
-vocabot_*.xlsx
+stick_word_group_*.xlsx
 
 # ---- Editores / SO --------------------------------------------------------
 .vscode/
@@ -71,3 +71,10 @@ Thumbs.db
 referencia/
 scratch/
 tmp/
+
+# Terraform (infra/terraform, ADR-0063): estado fica no bucket <projeto>-tfstate; o lock é versionado.
+infra/terraform/.terraform/
+infra/terraform/terraform.tfvars
+*.tfstate
+*.tfstate.*
+*.tfplan

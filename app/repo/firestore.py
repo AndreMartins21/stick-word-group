@@ -5,7 +5,7 @@
     espacos/{espaco_id}/entries/{slug}                espacos/{espaco_id}/entries/{slug}/sentences/{auto}
     processed/{message_id}                            lids/{lid}
 
-`processed.expira_em` é o campo da política de TTL de 7 dias (criada no `infra/setup.sh`).
+`processed.expira_em` é o campo da política de TTL de 7 dias (criada em `infra/terraform/main.tf`).
 `proximo_tick` espelha o perfil (ver `proximo_tick` em `repo/base.py`): a consulta dos lembretes
 usa só esse campo, então não exige índice composto e só lê os espaços que já venceram.
 

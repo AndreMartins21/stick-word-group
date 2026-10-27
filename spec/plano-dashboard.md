@@ -1,4 +1,4 @@
-# Plano — Dashboard de saúde e uso do Vocabot (observabilidade)
+# Plano — Dashboard de saúde e uso do stick-word-group (observabilidade)
 
 > **ADR-0062:** este projeto é só de grupos. As colunas de lembrete do privado saíram do snapshot
 > (ver `infra/bq/*.json`); espaços privados antigos ainda aparecem, mas não recebem mais nada.
@@ -20,7 +20,7 @@ Hoje o que existe para observar o sistema:
   `processed`), sem histórico: o Firestore guarda o estado atual, não a evolução.
 - **Logs** em JSON no stdout, mas eles **não saem da VM**: o Docker usa o driver `json-file`
   (`infra/vm/startup.sh`) e não há Ops Agent. Ou seja, hoje **não existe nenhuma falha visível na
-  GCP** — elas só aparecem em `infra/logs.sh`. A SA `vocabot-vm` já tem `roles/logging.logWriter`.
+  GCP** — elas só aparecem em `infra/logs.sh`. A SA `stick-word-group-vm` já tem `roles/logging.logWriter`.
 - **Nenhum evento** de uso é registrado de forma contável (lembrete enviado, chamada à IA, comando
   usado...). Os logs atuais são mensagens em texto livre, sem um campo de evento.
 - **Custo**: só no console de Billing.
@@ -40,12 +40,12 @@ feito pelo próprio bot, sem serviço novo.
                     │  waha ── logs ── driver gcplogs ─────────────┼──────────┤            │
                     └──────────────────────────────────────────────┼──────────┼────────────┘
                                                                    ▼          ▼
-                                            gs://…-vocabot-metrics/    Cloud Logging (_Default)
+                                            gs://…-metrics/    Cloud Logging (_Default)
                                             snapshot/tabela/dt=…/        │ Log Analytics (grátis)
                                                    │                     │
                                                    ▼                     ▼
-   Cloud Billing ── export ──► BigQuery: `billing_export`   `vocabot_metrics` (tabelas externas +
-                                           │                 views)   `vocabot_logs` (dataset linkado)
+   Cloud Billing ── export ──► BigQuery: `billing_export`   `stick_word_group_metrics` (tabelas externas +
+                                           │                 views)   `stick_word_group_logs` (dataset linkado)
                                            └──────────────┬─────────────┘
                                                           ▼
                               Grafana OSS no Cloud Run (min 0, IAP, sem chave)
@@ -175,7 +175,7 @@ registra ao redor de cada chamada ao canal.
   `handler.format(record)`, não `record.getMessage()`).
 - `google.cloud.logging.Client().get_default_handler()` usa `BackgroundThreadTransport` por padrão:
   não bloqueia a resposta ao WAHA esperando a rede.
-- Credencial: a mesma conta de serviço da VM (`vocabot-vm`, já tem `roles/logging.logWriter`),
+- Credencial: a mesma conta de serviço da VM (`stick-word-group-vm`, já tem `roles/logging.logWriter`),
   sem segredo novo.
 - Só liga com `app_env == "prod"` (dev/CI nunca tentam falar com a API real).
 - `docker-compose.yml` e `startup.sh` **não mudam** nesta revisão.
@@ -184,11 +184,11 @@ registra ao redor de cada chamada ao canal.
 
 ```bash
 # criam/alteram: mostrar e aguardar aprovação (regra de ouro 2)
-gcloud logging buckets update _Default --location=global --enable-analytics --project=anki-whatsapp
-gcloud logging links create vocabot_logs --bucket=_Default --location=global --project=anki-whatsapp
+gcloud logging buckets update _Default --location=global --enable-analytics --project=stick-word-group
+gcloud logging links create stick_word_group_logs --bucket=_Default --location=global --project=stick-word-group
 ```
 
-O dataset linkado `vocabot_logs` aparece no BigQuery sem cópia nem armazenamento cobrado; o Grafana
+O dataset linkado `stick_word_group_logs` aparece no BigQuery sem cópia nem armazenamento cobrado; o Grafana
 consulta a view `_AllLogs`. **[confirmar]** a localização do dataset linkado de um bucket `global`
 (precisa casar com a dos outros datasets, ver 3.5).
 
@@ -210,7 +210,7 @@ consulta a view `_AllLogs`. **[confirmar]** a localização do dataset linkado d
 > dentro de uma função que é deliberadamente pura e síncrona; o segundo não tem de onde vir (só
 > existe `Membro.marcado_em`, a última vez, não uma contagem). `n_respondeu_marcada` (via
 > `Resposta.marcado`) cobre a métrica de engajamento equivalente. As tabelas externas do BigQuery
-> e as views (3.6) ainda **não foram criadas** — só o bucket/dataset (`infra/setup_metricas.sh`,
+> e as views (3.6) ainda **não foram criadas** — só o bucket/dataset (`infra/terraform/storage.tf`,
 > ainda não executado) e o esquema versionado (`infra/bq/*.json`, já com teste de sincronia).
 
 ### 3.1 Onde roda
@@ -317,19 +317,19 @@ bytes armazenados** na documentação atual. Plano:
 
 ```bash
 # criam/alteram: mostrar e aguardar aprovação
-gcloud services enable bigquery.googleapis.com --project=anki-whatsapp
-gcloud storage buckets create gs://anki-whatsapp-vocabot-metrics --location=us-central1 \
-  --uniform-bucket-level-access --public-access-prevention --project=anki-whatsapp
+gcloud services enable bigquery.googleapis.com --project=stick-word-group
+gcloud storage buckets create gs://stick-word-group-metrics --location=us-central1 \
+  --uniform-bucket-level-access --public-access-prevention --project=stick-word-group
 # SA da VM só escreve NESTE bucket (sem leitura de outros, sem BigQuery)
-gcloud storage buckets add-iam-policy-binding gs://anki-whatsapp-vocabot-metrics \
-  --member=serviceAccount:vocabot-vm@anki-whatsapp.iam.gserviceaccount.com \
+gcloud storage buckets add-iam-policy-binding gs://stick-word-group-metrics \
+  --member=serviceAccount:stick-word-group-vm@stick-word-group.iam.gserviceaccount.com \
   --role=roles/storage.objectCreator
-bq --location=US mk --dataset anki-whatsapp:vocabot_metrics
+bq --location=US mk --dataset stick-word-group:stick_word_group_metrics
 ```
 
 - Uma **tabela externa** por pasta, com particionamento Hive (`dt`) e esquema declarado em
   `infra/bq/*.json` (versionado; nada de autodetect). Definidas por um script idempotente
-  `infra/setup_metricas.sh` (mesmo padrão `run`/`existe`/`DRY_RUN` do `setup.sh`).
+  `infra/terraform/storage.tf` (Terraform, ADR-0063).
 - **Views** em `infra/bq/views/*.sql` com a lógica do painel (o Grafana só faz `SELECT * FROM view`):
   `v_ultimo_dia_*`, `v_distribuicoes`, `v_falhas_diarias`, `v_lembretes_por_espaco`,
   `v_custo_mes`… Views versionadas = a consulta passa por PR e pode ser testada.
@@ -355,8 +355,8 @@ bq --location=US mk --dataset anki-whatsapp:vocabot_metrics
 Passos no console (o export de Billing **não** se configura por `gcloud`; exige papel de Billing
 Account Administrator — quem faz é o usuário):
 
-1. `bq --location=US mk --dataset anki-whatsapp:billing_export`.
-2. Console → Billing → *Billing export* → **Standard usage cost** → projeto `anki-whatsapp`,
+1. `bq --location=US mk --dataset stick-word-group:billing_export`.
+2. Console → Billing → *Billing export* → **Standard usage cost** → projeto `stick-word-group`,
    dataset `billing_export`. Com dataset multi-região, os dados do mês atual e do anterior chegam
    retroativos (o backfill pode levar até 5 dias). O export atualiza várias vezes ao dia, com
    atraso de horas — o painel diz "atualizado até ...".
@@ -364,7 +364,7 @@ Account Administrator — quem faz é o usuário):
    de custo que o painel sozinho não dá.
    ```bash
    # cria: mostrar e aguardar aprovação
-   gcloud billing budgets create --billing-account=<ID> --display-name=vocabot \
+   gcloud billing budgets create --billing-account=<ID> --display-name=stick-word-group \
      --budget-amount=5USD --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 \
      --threshold-rule=percent=1.0
    ```
@@ -387,7 +387,7 @@ dash/
                                   + plugin grafana-bigquery-datasource (versão fixada) instalado no build
   provisioning/datasources/*.yaml BigQuery (authenticationType: gce) + Cloud Monitoring (gce)
   provisioning/dashboards/*.yaml  aponta para /var/lib/grafana/dashboards
-  dashboards/vocabot.json         o painel (editado na UI → exportado → PR)
+  dashboards/stick-word-group.json         o painel (editado na UI → exportado → PR)
 infra/deploy_dash.sh              build + deploy + IAP (idempotente, DRY_RUN)
 ```
 
@@ -399,13 +399,13 @@ infra/deploy_dash.sh              build + deploy + IAP (idempotente, DRY_RUN)
 - Cloud Run: `us-central1`, `--min-instances=0 --max-instances=1 --memory=512Mi --cpu=1`,
   cobrança por requisição, SA própria.
 
-### 5.2 Conta de serviço `vocabot-dash` (menor privilégio, ADR-0007)
+### 5.2 Conta de serviço `stick-word-group-dash` (menor privilégio, ADR-0007)
 
 | Papel | Escopo |
 |---|---|
-| `roles/bigquery.dataViewer` | datasets `vocabot_metrics`, `billing_export`, `vocabot_logs` |
+| `roles/bigquery.dataViewer` | datasets `stick_word_group_metrics`, `billing_export`, `stick_word_group_logs` |
 | `roles/bigquery.jobUser` | projeto (necessário para rodar consulta) |
-| `roles/storage.objectViewer` | só o bucket `…-vocabot-metrics` (tabela externa lê o GCS com a credencial de quem consulta) |
+| `roles/storage.objectViewer` | só o bucket `…-metrics` (tabela externa lê o GCS com a credencial de quem consulta) |
 | `roles/monitoring.viewer` | projeto |
 | `roles/logging.viewAccessor` **[confirmar]** | view `_AllLogs` do bucket `_Default` (leitura do dataset linkado) |
 
@@ -413,16 +413,16 @@ infra/deploy_dash.sh              build + deploy + IAP (idempotente, DRY_RUN)
 
 ```bash
 gcloud services enable run.googleapis.com artifactregistry.googleapis.com \
-  cloudbuild.googleapis.com iap.googleapis.com --project=anki-whatsapp
-gcloud run deploy vocabot-dash --source=dash --region=us-central1 --project=anki-whatsapp \
-  --service-account=vocabot-dash@anki-whatsapp.iam.gserviceaccount.com \
+  cloudbuild.googleapis.com iap.googleapis.com --project=stick-word-group
+gcloud run deploy stick-word-group-dash --source=dash --region=us-central1 --project=stick-word-group \
+  --service-account=stick-word-group-dash@stick-word-group.iam.gserviceaccount.com \
   --no-allow-unauthenticated --iap --min-instances=0 --max-instances=1 --memory=512Mi
-gcloud run services add-iam-policy-binding vocabot-dash --region=us-central1 \
+gcloud run services add-iam-policy-binding stick-word-group-dash --region=us-central1 \
   --member=serviceAccount:service-<PROJECT_NUMBER>@gcp-sa-iap.iam.gserviceaccount.com \
-  --role=roles/run.invoker --project=anki-whatsapp
-gcloud iap web add-iam-policy-binding --resource-type=cloud-run --service=vocabot-dash \
+  --role=roles/run.invoker --project=stick-word-group
+gcloud iap web add-iam-policy-binding --resource-type=cloud-run --service=stick-word-group-dash \
   --region=us-central1 --member=user:<email do usuário> \
-  --role=roles/iap.httpsResourceAccessor --project=anki-whatsapp
+  --role=roles/iap.httpsResourceAccessor --project=stick-word-group
 ```
 
 IAP direto no Cloud Run (sem load balancer) funciona em projeto **sem organização**; para contas
@@ -431,13 +431,13 @@ e, pela CLI, possivelmente um cliente OAuth próprio **[confirmar]** no primeiro
 Política de limpeza no Artifact Registry: manter as 2 imagens mais recentes (fica na cota de 0,5 GB).
 
 CI: primeiro deploy manual pelo `infra/deploy_dash.sh`. Depois, opcional, um job no `ci.yml` só
-quando `dash/**` ou `infra/bq/**` mudar (exige papéis novos na `vocabot-deploy` — decidir depois).
+quando `dash/**` ou `infra/bq/**` mudar (exige papéis novos na `stick-word-group-deploy` — decidir depois).
 A CI já pode validar: JSON dos painéis parseia, `uid` únicos, toda view referenciada existe em
 `infra/bq/views/`, nenhum número de telefone literal nos arquivos (repo é público).
 
 **ADR-0031 — Painel no Grafana OSS em Cloud Run com IAP** (tabela 1.2; auth anônima vs auth.proxy).
 
-## 6. O painel (`dash/dashboards/vocabot.json`)
+## 6. O painel (`dash/dashboards/stick-word-group.json`)
 
 Variáveis no topo: intervalo de tempo, `tipo` (privado/grupo/todos), `grupo`. Linhas na ordem de
 "olhar primeiro":
@@ -512,8 +512,8 @@ SELECT tipo,
        APPROX_QUANTILES(n_termos, 100)[OFFSET(75)] AS p75,
        APPROX_QUANTILES(n_termos, 100)[OFFSET(90)] AS p90,
        MAX(n_termos) AS maximo
-FROM vocabot_metrics.espacos
-WHERE dt = (SELECT MAX(dt) FROM vocabot_metrics.espacos)
+FROM stick_word_group_metrics.espacos
+WHERE dt = (SELECT MAX(dt) FROM stick_word_group_metrics.espacos)
 GROUP BY tipo
 ```
 
@@ -547,9 +547,9 @@ passaram a ser cobradas antes de criar.
 | Marco | Entrega | Comandos de GCP (usuário aprova e roda com `!`) | Commit/ADR |
 |---|---|---|---|
 | **M27** | ✅ eventos estruturados, handler do bot para o Cloud Logging — **pendente:** Log Analytics | `logging buckets update --enable-analytics`, `logging links create` | ADR-0028, spec seção 12 |
-| **M28** | ✅ `Banco.listar_espacos`, `autor_id`/`nome`, `montar_snapshot`, `scripts.snapshot` — **pendente:** bucket + dataset + tabelas externas + views | `infra/setup_metricas.sh` (bucket + dataset), `bq mk --external_table_definition` × 6, views | ADR-0029, spec 7.1 e 12 |
+| **M28** | ✅ `Banco.listar_espacos`, `autor_id`/`nome`, `montar_snapshot`, `scripts.snapshot` — **pendente:** bucket + dataset + tabelas externas + views | `infra/terraform/storage.tf` (bucket + dataset), `bq mk --external_table_definition` × 6, views | ADR-0029, spec 7.1 e 12 |
 | **M29** | export de Billing, orçamento, views de custo | console de Billing; `billing budgets create` | spec 12 |
-| **M30** | `dash/`, SA `vocabot-dash`, Cloud Run + IAP, painel completo | `services enable run/artifactregistry/cloudbuild`, SA + papéis, `run deploy --iap`, `iap web add-iam-policy-binding` | ADR-0031 |
+| **M30** | `dash/`, SA `stick-word-group-dash`, Cloud Run + IAP, painel completo | `services enable run/artifactregistry/cloudbuild`, SA + papéis, `run deploy --iap`, `iap web add-iam-policy-binding` | ADR-0031 |
 
 Dá para ter valor cedo: ao fim do **M27** já se vê falhas no Log Analytics da própria GCP (sem
 painel); ao fim do **M28**, as tabelas de grupos/pessoas/admins podem ser consultadas no BigQuery
