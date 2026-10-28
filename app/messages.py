@@ -26,6 +26,7 @@ from app.domain.models import (
     SentidoSalvo,
     Synonym,
     Veredito,
+    ordem_do_nivel,
 )
 from app.domain.ranking import Ranking as RankingGeral
 
@@ -606,27 +607,60 @@ def grupo_desligado(nome: str | None) -> str:
     return f"✅ Turned off: {nome or 'that group'}. Its words are still saved."
 
 
+_EMOJI_DO_NIVEL = {
+    "A1-A2": "🟢",
+    "A2-B1": "🟢",
+    "B1-B2": "🔵",
+    "B2-C1": "🔵",
+    "C1-C2": "🟣",
+    "C2": "🟣",
+}
+
+
+def _alunos(n: int) -> str:
+    return f"{n} student" if n == 1 else f"{n} students"
+
+
 def grupos(
-    ativos: Sequence[str | None],
-    fixos: Sequence[str | None],
+    ativos: Sequence[tuple[str | None, str | None, int]],
+    fixos: Sequence[tuple[str | None, str | None, int]],
     pendentes: Sequence[tuple[str | None, int]],
     maximo: int,
     p: str = "!",
 ) -> str:
-    """`ativos`: nomes dos grupos ativados por comando (numerados); `fixos`: os de ALLOWED_GROUPS;
-    `pendentes`: (nome, horas até eu sair) dos grupos em que ainda ninguém digitou !activate."""
+    """`ativos`: (nome, nível, alunos) dos grupos ativados por comando, numerados na ordem dada
+    (o chamador já ordena por nível, e `/groups off N` usa a mesma ordem); `fixos`: os de
+    ALLOWED_GROUPS; `pendentes`: (nome, horas até eu sair) dos grupos sem !activate. Os ativos
+    e fixos aparecem em blocos por nível, do mais básico ao mais avançado."""
     if not ativos and not fixos and not pendentes:
         return f"I'm not in any group yet. Add me to one and send {p}activate there."
     linhas: list[str] = []
     if ativos or fixos:
         linhas.append(f"🏫 *Active groups* ({len(ativos)}/{maximo})")
-        linhas += [f"{i}. {nome or '(no name)'}" for i, nome in enumerate(ativos, start=1)]
-        linhas += [f"• {nome or '(no name)'} (fixed in the config)" for nome in fixos]
+        itens = [
+            (f"{i}.", nome, nivel, alunos, "")
+            for i, (nome, nivel, alunos) in enumerate(ativos, start=1)
+        ]
+        itens += [("•", nome, nivel, alunos, " _(fixed)_") for nome, nivel, alunos in fixos]
+        for nivel in sorted({item[2] for item in itens}, key=ordem_do_nivel):
+            titulo = (
+                f"{_EMOJI_DO_NIVEL[nivel]} *{nivel}*"
+                if nivel in _EMOJI_DO_NIVEL
+                else "⚪ *No level yet*"
+            )
+            linhas += ["", titulo]
+            linhas += [
+                f"{marca} {nome or '(no name)'} — {_alunos(alunos)}{fixo}"
+                for marca, nome, nivel_do_item, alunos, fixo in itens
+                if nivel_do_item == nivel
+            ]
     if pendentes:
+        if linhas:
+            linhas.append("")
         linhas.append(f"⏳ *Waiting for a {p}activate* (I leave when the time runs out)")
         linhas += [f"• {nome or '(no name)'} — {horas}h left" for nome, horas in pendentes]
     if ativos:
-        linhas.append("Turn one off with /groups off 1.")
+        linhas += ["", "_Turn one off with /groups off 1._"]
     return "\n".join(linhas)
 
 

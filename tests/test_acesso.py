@@ -10,6 +10,7 @@ import pytest
 from app import messages
 from app.channel.fake import FakeChannel
 from app.config import Settings
+from app.domain.models import Membro, NivelUsuario, Profile
 from app.flows.admin import (
     Acesso,
     Resultado,
@@ -297,10 +298,61 @@ async def test_groups_lista_ativos_fixos_e_pendentes_com_o_prazo() -> None:
     resposta = await comando_privado(a, "/groups", ADMIN)
 
     assert isinstance(resposta, str)
-    assert "1. Turma A" in resposta
-    assert "Turma Fixa (fixed in the config)" in resposta
+    assert "1. Turma A — 0 students" in resposta
+    assert "• Turma Fixa — 0 students _(fixed)_" in resposta
     assert "Turma C — 5h left" in resposta
     assert "(1/10)" in resposta
+
+
+def _turma(banco: MemoryBanco, grupo: str, nivel: NivelUsuario, alunos: int) -> None:
+    repo = banco.do_espaco(grupo)
+    repo.salvar_perfil(Profile(nivel=nivel, criado_em=T0))
+    for i in range(alunos):
+        repo.salvar_membro(f"55319000000{i:02d}", Membro(entrou_em=T0))
+
+
+async def test_groups_usa_o_nome_do_whatsapp_quando_o_activate_nao_deu_nome() -> None:
+    a, banco, canal = _acesso(fixos=())
+    canal.nomes_de_grupos[GRUPO] = "Turma do WhatsApp"
+    banco.ativar_grupo(GRUPO, nome=None, por=ADMIN, agora=T0)
+
+    resposta = await comando_privado(a, "/groups", ADMIN)
+
+    assert isinstance(resposta, str) and "1. Turma do WhatsApp" in resposta
+    assert "(no name)" not in resposta
+
+
+async def test_groups_agrupa_por_nivel_e_conta_os_alunos_sem_o_staff() -> None:
+    a, banco, _ = _acesso(fixos=())
+    banco.ativar_grupo("1@g.us", nome="Avançada", por=ADMIN, agora=T0)
+    banco.ativar_grupo("2@g.us", nome="Básica", por=ADMIN, agora=T0 + timedelta(minutes=1))
+    banco.ativar_grupo("3@g.us", nome="Nova", por=ADMIN, agora=T0 + timedelta(minutes=2))
+    _turma(banco, "1@g.us", "B1-B2", alunos=1)
+    _turma(banco, "2@g.us", "A1-A2", alunos=3)
+    staff = banco.do_espaco("2@g.us")
+    staff.salvar_membro(ADMIN, Membro(entrou_em=T0))
+    staff.salvar_membro("5531955554444", Membro(papel="professor", entrou_em=T0))
+
+    resposta = await comando_privado(a, "/groups", ADMIN)
+
+    assert isinstance(resposta, str)
+    a1, b1, sem = (resposta.index(t) for t in ("🟢 *A1-A2*", "🔵 *B1-B2*", "⚪ *No level yet*"))
+    assert a1 < resposta.index("1. Básica — 3 students") < b1
+    assert b1 < resposta.index("2. Avançada — 1 student\n") < sem
+    assert sem < resposta.index("3. Nova — 0 students")
+
+
+async def test_groups_off_usa_a_numeracao_por_nivel() -> None:
+    a, banco, _ = _acesso(fixos=())
+    banco.ativar_grupo("1@g.us", nome="Avançada", por=ADMIN, agora=T0)
+    banco.ativar_grupo("2@g.us", nome="Básica", por=ADMIN, agora=T0 + timedelta(minutes=1))
+    _turma(banco, "1@g.us", "C1-C2", alunos=0)
+    _turma(banco, "2@g.us", "A2-B1", alunos=0)
+
+    resposta = await comando_privado(a, "/groups off 1", ADMIN)
+
+    assert resposta == messages.grupo_desligado("Básica")
+    assert [g.id for g in banco.listar_grupos_ativos()] == ["1@g.us"]
 
 
 async def test_groups_sem_nenhum_grupo() -> None:

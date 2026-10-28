@@ -189,7 +189,10 @@ outro número é ignorado em silêncio — sem resposta, sem `sendSeen`, sem gra
 deduplicação) e sem chamar a IA. Para o dono e os admins:
 
 - `/groups` (dono e admins) lista os grupos ativos e os pendentes, com o nome e as horas que faltam
-  para o bot sair, e `/groups off N` desativa o grupo N da lista.
+  para o bot sair, e `/groups off N` desativa o grupo N da lista. O nome é o do `!activate` ou, sem
+  ele, o assunto do grupo no WhatsApp; os ativos (e os fixos) aparecem em blocos por nível, do mais
+  básico ao mais avançado, cada um com o número de alunos (membros cadastrados que não são staff), e
+  a numeração do `off N` segue essa ordem.
 - `/admin`, `/admin add NUMERO` e `/admin remove NUMERO` (só o dono) gerenciam os admins.
 - `/teachers`, `/teachers NUMERO` (alterna, M59), `/teachers add NUMERO` e `/teachers remove NUMERO`
   (admins e dono, M57, ADR-0055; `/teacher` vale também) gerenciam os professores globais.

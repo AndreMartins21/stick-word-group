@@ -22,6 +22,7 @@ from app import messages
 from app.channel.base import Channel
 from app.channel.parser import numero_esta_na_lista
 from app.domain.choices import normalizar
+from app.domain.models import ordem_do_nivel
 from app.domain.ranking import Turma, calcular, meses_atras
 from app.flows.base import bloq
 from app.flows.papeis import rebaixar_em_todos
@@ -266,16 +267,7 @@ async def _ranking(a: Acesso, argumentos: list[str]) -> str | Arquivo:
         if not 1 <= meses <= RANKING_MESES_MAXIMO:
             return messages.RANKING_USO
     desde = meses_atras(a.agora(), meses)
-    professores = await bloq(a.banco.listar_professores)
-    admins = await bloq(a.banco.listar_admins)
-
-    def eh_staff(numero: str) -> bool:
-        return (
-            a.eh_dono(numero)
-            or numero_esta_na_lista(numero, admins)
-            or numero_esta_na_lista(numero, professores)
-        )
-
+    eh_staff = await _staff(a)
     turmas: list[Turma] = []
     for grupo in await bloq(a.banco.listar_grupos_ativos):
         repo = a.banco.do_espaco(grupo.id)
@@ -297,8 +289,61 @@ async def _ranking(a: Acesso, argumentos: list[str]) -> str | Arquivo:
     )
 
 
+async def _staff(a: Acesso) -> Callable[[str], bool]:
+    """Dono, admins e professores globais (M57): nunca contam como alunos."""
+    professores = await bloq(a.banco.listar_professores)
+    admins = await bloq(a.banco.listar_admins)
+
+    def eh_staff(numero: str) -> bool:
+        return (
+            a.eh_dono(numero)
+            or numero_esta_na_lista(numero, admins)
+            or numero_esta_na_lista(numero, professores)
+        )
+
+    return eh_staff
+
+
+@dataclass(frozen=True)
+class _Turma:
+    """Uma linha do `/groups`: o nome salvo no `!activate` ou, sem ele, o assunto do grupo no
+    WhatsApp; o nível do perfil do grupo (`None` antes da 1ª mensagem); e os alunos cadastrados."""
+
+    id: str
+    nome: str | None
+    nivel: str | None
+    alunos: int
+
+    @property
+    def linha(self) -> tuple[str | None, str | None, int]:
+        return (self.nome, self.nivel, self.alunos)
+
+
+async def _turmas(
+    a: Acesso, grupos: Sequence[tuple[str, str | None]], eh_staff: Callable[[str], bool]
+) -> list[_Turma]:
+    """`grupos`: (id, nome salvo). Ordenadas por nível (estável), a ordem que `/groups` numera."""
+    turmas: list[_Turma] = []
+    for grupo_id, nome in grupos:
+        repo = a.banco.do_espaco(grupo_id)
+        perfil = await bloq(repo.obter_perfil)
+        membros = await bloq(repo.listar_membros)
+        turmas.append(
+            _Turma(
+                id=grupo_id,
+                nome=nome or await a.canal.group_name(grupo_id),
+                nivel=perfil.nivel if perfil else None,
+                alunos=sum(1 for n, m in membros if m.papel != "professor" and not eh_staff(n)),
+            )
+        )
+    return sorted(turmas, key=lambda t: ordem_do_nivel(t.nivel))
+
+
 async def _grupos(a: Acesso, argumentos: list[str]) -> str:
-    ativos = await bloq(a.banco.listar_grupos_ativos)
+    eh_staff = await _staff(a)
+    ativos = await _turmas(
+        a, [(g.id, g.nome) for g in await bloq(a.banco.listar_grupos_ativos)], eh_staff
+    )
     if argumentos:
         if (
             normalizar(argumentos[0]) != "off"
@@ -309,15 +354,16 @@ async def _grupos(a: Acesso, argumentos: list[str]) -> str:
         indice = int(argumentos[1])
         if not 1 <= indice <= len(ativos):
             return messages.GRUPO_NAO_EXISTE
-        grupo = ativos[indice - 1]
-        await bloq(a.banco.desativar_grupo, grupo.id)
-        return messages.grupo_desligado(grupo.nome)
+        turma = ativos[indice - 1]
+        await bloq(a.banco.desativar_grupo, turma.id)
+        return messages.grupo_desligado(turma.nome)
 
+    fixos = await _turmas(a, [(g, None) for g in a.grupos_fixos], eh_staff)
     pendentes = await bloq(a.banco.listar_grupos_pendentes)
     agora = a.agora()
     return messages.grupos(
-        [g.nome for g in ativos],
-        [await a.canal.group_name(g) for g in a.grupos_fixos],
+        [t.linha for t in ativos],
+        [t.linha for t in fixos],
         [
             (
                 await a.canal.group_name(grupo_id),
