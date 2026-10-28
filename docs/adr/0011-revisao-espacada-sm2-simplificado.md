@@ -1,6 +1,6 @@
 # ADR-0011: Revisão espaçada com SM-2 simplificado, independente do agendamento do Anki
 
-- **Status:** Aceito
+- **Status:** Substituído por ADR-0064
 - **Data:** 2026-09-23
 
 ## Contexto

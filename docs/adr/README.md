@@ -20,7 +20,7 @@ operacional: numeração, status e o índice.
 | [0008](0008-continuar-na-gcp-e-manter-a-saida-portavel.md) | Continuar na GCP e manter a saída portátil (casa ou Oracle) para depois do trial | Aceito | 2026-09-20 |
 | [0009](0009-roteamento-de-texto-livre-pela-ia.md) | Roteamento de texto livre por uma chamada de IA, máquina de estados reduzida a dois estados | Aceito | 2026-09-22 |
 | [0010](0010-interface-em-ingles.md) | Interface do bot em inglês, com a tradução como única exceção | Aceito | 2026-09-22 |
-| [0011](0011-revisao-espacada-sm2-simplificado.md) | Revisão espaçada com SM-2 simplificado, independente do agendamento do Anki | Aceito | 2026-09-23 |
+| [0011](0011-revisao-espacada-sm2-simplificado.md) | Revisão espaçada com SM-2 simplificado, independente do agendamento do Anki | Substituído por ADR-0064 | 2026-09-23 |
 | [0012](0012-agendador-no-processo-com-destino-persistido.md) | Agendador de lembretes no próprio processo, com destino persistido e trava de iniciativa | Aceito | 2026-09-23 |
 | [0013](0013-deploy-continuo-via-github-actions.md) | Deploy contínuo via GitHub Actions, autenticado por Workload Identity Federation | Aceito | 2026-09-23 |
 | [0014](0014-export-em-planilha-excel.md) | Export em planilha Excel no lugar do arquivo de importação do Anki | Substituído por ADR-0062 | 2026-09-23 |
@@ -73,6 +73,7 @@ operacional: numeração, status e o índice.
 | [0061](0061-ranking-mostra-numero-e-nome-salvo.md) | O PDF do ranking mostra o número e o nome salvo do aluno (substitui a decisão 7 do ADR-0056) | Aceito | 2026-10-23 |
 | [0062](0062-separacao-em-stick-word-e-stick-word-group.md) | Separar o projeto em stick-word (individual) e stick-word-group (turmas) | Aceito | 2026-10-26 |
 | [0063](0063-infra-em-terraform-e-projeto-gcp-proprio.md) | Infra em Terraform, num projeto GCP próprio (stick-word-group), sem o nome vocabot | Aceito | 2026-10-27 |
+| [0064](0064-memoria-por-aluno-e-cartao-do-grupo-pela-cobertura.md) | Memória por aluno no grupo e cartão da turma pela cobertura, no lugar do SM-2 | Aceito | 2026-10-28 |
 
 ## Quando escrever um
 

@@ -307,7 +307,8 @@ class Membro(BaseModel):
 
 class Resposta(BaseModel):
     """Documento de `espacos/{grupo}/respostas/{auto}` (M17): quem respondeu a uma revisão do
-    grupo. Não entra no agendamento; alimenta o `!group` e as métricas do piloto."""
+    grupo. Alimenta o `!group`, o ranking e, desde o M65 (ADR-0064), a memória por aluno
+    (`domain/memoria.py`) — só as de `tipo="diaria"`."""
 
     entry: str
     autor_id: str
@@ -342,8 +343,9 @@ class Entry(BaseModel):
     exportado: bool = False
     criado_em: datetime = Field(default_factory=agora_utc)
     atualizado_em: datetime = Field(default_factory=agora_utc)
-    # Revisão espaçada (M10, seção 5.7): SM-2 simplificado (app/domain/srs.py). Independente do
-    # agendamento do Anki — ver ADR-0011. `proxima_revisao=None` = cartão novo, vencido desde já.
+    # Revisão espaçada (seção 5.7): desde o M65 (ADR-0064), caixas do grupo pela cobertura da turma
+    # (app/domain/srs.py); `repeticoes` é a caixa e `facilidade` (do SM-2 do ADR-0011) ficou sem
+    # uso. `proxima_revisao=None` = cartão novo, vencido desde já.
     repeticoes: int = 0
     intervalo_dias: float = 0.0
     facilidade: float = 2.5
@@ -418,6 +420,9 @@ class Sessao(BaseModel):
     semanal_indice: int = 0
     semanal_respondidas: int = 0
     semanal_puladas: int = 0
+    # M65 (ADR-0064): o quanto cada aluno elegível precisa de cada palavra do vocabulário (slug ->
+    # 1 - chance de lembrar), para a pergunta de quem é marcado ser a das palavras que ele esquece.
+    semanal_foco: dict[str, dict[str, float]] = Field(default_factory=dict)
     # Revisão em grupo (M17, ADR-0020): quem está marcado para o card atual, até quando, e quantas
     # vezes o card já foi repassado a outro aluno por falta de resposta (no máximo uma).
     marcado_id: str | None = None

@@ -18,6 +18,7 @@ from app.domain.models import (
     PerguntaSemanal,
     PerguntasSemanais,
     Profile,
+    Resposta,
     SentidoSalvo,
     Sessao,
 )
@@ -637,3 +638,99 @@ async def test_resposta_do_semanal_registra_o_tipo_para_o_ranking() -> None:
 
     (resposta, *_) = m.banco.do_espaco(GRUPO).listar_respostas()
     assert resposta.tipo == "semanal"
+
+
+# --- M65 (ADR-0064): o semanal consome a memória por aluno, sem alimentá-la -------------------
+
+
+def _errou(m: Montagem, autor: str, entry: str) -> None:
+    repo = m.banco.do_espaco(GRUPO)
+    for qualidade, horas in (("bom", 30), ("de_novo", 20)):
+        repo.registrar_resposta(
+            Resposta(
+                entry=entry,
+                autor_id=autor,
+                marcado=False,
+                qualidade=qualidade,
+                tipo="diaria",
+                criado_em=T0 - timedelta(hours=horas),
+            )
+        )
+
+
+async def test_o_vocabulario_comeca_pelas_palavras_que_a_turma_mais_esquece() -> None:
+    m = _turma()
+    _errou(m, ANA.numero, "w3")
+    _errou(m, BIA.numero, "w3")
+
+    await _comecar(m)
+
+    _, argumentos = m.tutor.chamadas[0]
+    assert isinstance(argumentos, tuple)
+    vocabulario = argumentos[0]
+    assert isinstance(vocabulario, tuple) and vocabulario[0] == "w3"
+
+
+async def test_quem_e_marcado_recebe_a_pergunta_das_palavras_que_ele_esquece() -> None:
+    m = montar(
+        tutor=FakeTutor(
+            perguntas_semanais=[[_pergunta(i) for i in range(3)]],
+            avaliacoes_da_pergunta=[_ok() for _ in range(4)],
+        ),
+        numero_do_bot=BOT,
+        sortear=lambda itens: itens[0],
+    )
+    m.channel.participantes_de_grupos[GRUPO] = [*NUMEROS, BOT]
+    repo = m.banco.do_espaco(GRUPO)
+    for i, aluno in enumerate(ALUNOS):
+        repo.salvar_membro(
+            aluno.numero, Membro(nome=aluno.nome, entrou_em=T0 + timedelta(minutes=i))
+        )
+    for entrada in _palavras(3):
+        repo.criar_entrada(entrada)
+    repo.salvar_perfil(Profile(nivel="B1-B2", chat_id=GRUPO, proxima_diaria=T0 + timedelta(days=9)))
+    # Cada aluno lembra duas palavras e esqueceu uma diferente.
+    for numero, esqueceu in zip(NUMEROS, ("w2", "w0", "w1"), strict=True):
+        for i in range(3):
+            if f"w{i}" == esqueceu:
+                _errou(m, numero, esqueceu)
+            else:
+                repo.registrar_resposta(
+                    Resposta(
+                        entry=f"w{i}",
+                        autor_id=numero,
+                        marcado=False,
+                        qualidade="bom",
+                        tipo="diaria",
+                        criado_em=T0 - timedelta(hours=1),
+                    )
+                )
+    esperado = dict(zip(NUMEROS, ("w2", "w0", "w1"), strict=True))
+
+    await _comecar(m)
+    vistos = []
+    for _ in range(3):
+        marcado = _marcado(m)
+        sessao = _sessao(m)
+        palavra = sessao.semanal_perguntas[sessao.semanal_indice].palavras[0]
+        assert palavra == esperado[marcado], (marcado, palavra)
+        vistos.append(palavra)
+        await m.marca_no_grupo(_autor(m, marcado), "I would ask for help")
+        if _sessao(m).estado != Estado.WEEKLY_QUIZ:
+            break
+
+    assert sorted(vistos) == ["w0", "w1", "w2"]
+
+
+async def test_responder_o_semanal_nao_mexe_na_memoria_nem_no_agendamento() -> None:
+    from app.domain.memoria import Memoria
+
+    m = _turma()
+    await _comecar(m)
+    repo = m.banco.do_espaco(GRUPO)
+    antes = repo.listar_entradas()
+
+    await m.marca_no_grupo(_autor(m, _marcado(m)), "I would ask for help")
+
+    assert repo.listar_entradas() == antes
+    assert Memoria.de(repo.listar_respostas()).estados == {}

@@ -2,16 +2,20 @@
 vocabulário do grupo e **marca um aluno** (rodízio, como no ADR-0020) por pergunta. Qualquer um pode
 tentar e recebe feedback, mas a pergunta só avança quando a pessoa marcada responde (ou alguém usa
 `skip`). Menu: `1` explica a pergunta (PT primeiro em turma iniciante), `2` a lê em voz alta, `3` pula.
-Não mexe no SM-2: é conversa, não revisão de cartão. A rodada fecha sozinha após 3 h sem mensagem."""
+Não mexe no agendamento: é conversa, não revisão de cartão. A rodada fecha sozinha após 3 h sem
+mensagem. Desde o M65 (ADR-0064) o desafio **consome** a memória por aluno (`domain/memoria.py`), sem
+alimentá-la: o vocabulário começa pelas palavras que a turma mais esquece, e quem é marcado recebe a
+pergunta com as palavras que ele mais precisa."""
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
 
 from app import messages
 from app.domain.agenda_grupo import MAX_PERGUNTAS
+from app.domain.memoria import escolher_pergunta, necessidade_da_turma, necessidades
 from app.domain.models import Entry, Estado, PerguntaSemanal, Profile, Resposta, Sessao, slugify
 from app.flows import review
 from app.flows.base import Deps, bloq
@@ -23,10 +27,17 @@ _RECENTE = timedelta(days=7)
 
 
 def escolher_vocabulario(
-    entradas: Sequence[Entry], agora: datetime, limite: int = MAX_PALAVRAS_NO_VOCABULARIO
+    entradas: Sequence[Entry],
+    agora: datetime,
+    limite: int = MAX_PALAVRAS_NO_VOCABULARIO,
+    *,
+    necessidade: Mapping[str, float] | None = None,
 ) -> list[tuple[str, str]]:
     """As palavras que a IA pode usar: as criadas ou revisadas nos últimos 7 dias primeiro (mais
-    recentes antes), completando com as que vencem mais cedo. `(palavra, definição)`."""
+    recentes antes), completando com as que vencem mais cedo. `(palavra, definição)`.
+
+    Com `necessidade` (M65: slug -> o quanto a turma precisa), as que a turma mais esquece vêm
+    primeiro; o critério acima só desempata."""
 
     def ultima_atividade(e: Entry) -> datetime:
         return max(e.criado_em, e.revisada_em or e.criado_em)
@@ -40,7 +51,10 @@ def escolher_vocabulario(
         (e for e in entradas if agora - ultima_atividade(e) > _RECENTE),
         key=lambda e: e.proxima_revisao or e.criado_em,
     )
-    return [(e.palavra, e.sentido.definicao) for e in (*recentes, *resto)[:limite]]
+    ordem = [*recentes, *resto]
+    if necessidade is not None:
+        ordem.sort(key=lambda e: -necessidade.get(e.slug, 0.0))  # estável: mantém o desempate
+    return [(e.palavra, e.sentido.definicao) for e in ordem[:limite]]
 
 
 def quantidade_de_perguntas(perfil: Profile, alunos: int) -> int:
@@ -63,13 +77,20 @@ async def iniciar(d: Deps, perfil: Profile, *, avisar: bool = False) -> Sessao:
         return d.sessao_vazia()
 
     n = quantidade_de_perguntas(perfil, len(alunos))
-    vocabulario = escolher_vocabulario(entradas, d.agora())
+    numeros = [numero for numero, _ in alunos]
+    slugs = [e.slug for e in entradas]
+    memoria = await review.memoria_da_turma(d)
+    vocabulario = escolher_vocabulario(
+        entradas, d.agora(), necessidade=necessidade_da_turma(numeros, slugs, memoria, d.agora())
+    )
+    escolhidas = {slugify(palavra) for palavra, _ in vocabulario}
+    foco = necessidades(numeros, sorted(escolhidas), memoria, d.agora())
     async with d.conversa.digitando():
         perguntas = await bloq(d.tutor.weekly_questions, vocabulario, perfil.nivel, n)
 
     d.conversa.nova_iniciativa()  # o bot está iniciando, não respondendo — reseta o limite de 3
     await d.conversa.enviar(messages.semanal_abertura(len(perguntas)))
-    return await _apresentar(d, perguntas, 0, 0, 0, anterior=None)
+    return await _apresentar(d, perguntas, 0, 0, 0, anterior=None, foco=foco)
 
 
 async def _apresentar(
@@ -80,13 +101,18 @@ async def _apresentar(
     puladas: int,
     *,
     anterior: str | None,
+    foco: dict[str, dict[str, float]],
 ) -> Sessao:
-    """Marca o próximo aluno do rodízio e manda a pergunta, começando pela menção."""
+    """Marca o próximo aluno do rodízio e manda a pergunta, começando pela menção. Das perguntas
+    que faltam, vai a das palavras que o marcado mais precisa (M65)."""
     alunos = await review.alunos_elegiveis(d, atualizar=False)
     marcado = await review.marcar(d, alunos, excluir=anterior)
     if marcado is None:  # todos saíram do grupo no meio da rodada
         await d.conversa.enviar(messages.semanal_encerrada(respondidas, puladas, len(perguntas)))
         return d.sessao_vazia()
+    perguntas = list(perguntas)
+    escolhida = indice + escolher_pergunta(perguntas[indice:], foco.get(marcado, {}))
+    perguntas[indice], perguntas[escolhida] = perguntas[escolhida], perguntas[indice]
     texto = messages.pergunta_semanal(
         indice + 1, len(perguntas), marcado, perguntas[indice].pergunta
     )
@@ -97,6 +123,7 @@ async def _apresentar(
         semanal_indice=indice,
         semanal_respondidas=respondidas,
         semanal_puladas=puladas,
+        semanal_foco=foco,
         marcado_id=marcado,
         marcacao_expira_em=d.agora() + d.grupo_cfg.timeout,
         atualizado_em=d.agora(),
@@ -111,7 +138,13 @@ async def _avancar(d: Deps, sessao: Sessao, respondidas: int, puladas: int) -> S
         )
         return d.sessao_vazia()
     return await _apresentar(
-        d, sessao.semanal_perguntas, proximo, respondidas, puladas, anterior=sessao.marcado_id
+        d,
+        sessao.semanal_perguntas,
+        proximo,
+        respondidas,
+        puladas,
+        anterior=sessao.marcado_id,
+        foco=sessao.semanal_foco,
     )
 
 

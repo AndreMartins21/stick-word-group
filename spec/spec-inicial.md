@@ -251,8 +251,8 @@ deduplicação e do `sendSeen`). Mídia é ignorada, **exceto nota de voz que ci
 (fuso da turma; ±20 min, M55, ADR-0053), de segunda a sexta (`Profile.diaria_*`; `!daily 20h`, `!daily weekends on`, `!daily off`,
 `!daily size 3`). `!review` começa uma na hora. **Ninguém é marcado**: o card convida todo mundo, e
 qualquer participante responde com `!texto`, recebendo feedback da IA (`Tutor.review`). A **primeira
-resposta aceitável** (`qualidade != de_novo`) vale a nota (`srs.reagendar` no cartão do grupo) e o bot
-manda o feedback com o nome de quem respondeu e o próximo card numa mensagem só; resposta `de_novo`
+resposta aceitável** (`qualidade != de_novo`) avança, reagendando o cartão do grupo pela **cobertura da
+turma** (M65, ADR-0064, seção 5.7), e o bot manda o feedback com o nome de quem respondeu e o próximo card numa mensagem só; resposta `de_novo`
 recebe feedback e a palavra segue aberta (cartão intacto). `!skip` (ou `/skip`) pula a palavra sem
 mexer na nota; `!skipall` (`/skip-all`, `!0`, `!stop`) encerra com o resumo (`Skipped:` lista as puladas).
 `LIMITE_POR_SESSAO_GRUPO` (5) palavras por rodada, ou o `tamanho_revisao` do `!daily size`.
@@ -264,7 +264,8 @@ mexer na nota; `!skipall` (`/skip-all`, `!0`, `!stop`) encerra com o resumo (`Sk
   atraso > 2h desiste do horário; sessão ocupada e não expirada adia; sem palavras fica em silêncio.
   **Pausa** depois de 3 revisões agendadas seguidas sem nenhuma mensagem do grupo
   (`Profile.revisoes_sem_resposta`); qualquer mensagem do grupo zera o contador.
-- `respostas/{auto}` registra `{entry, autor_id, marcado=false, qualidade}` de cada resposta.
+- `respostas/{auto}` registra `{entry, autor_id, marcado=false, qualidade}` de cada resposta — também
+  as erradas, que desde o M65 entram na memória por aluno.
 
 **Desafio semanal do grupo (M36, ADR-0034).** Uma vez por semana (padrão **sexta 13h**, fuso da turma; **Jitter (M55, ADR-0053):** a diária e o semanal de cada grupo saem de -20 a +20 min do horário configurado (deslocamento fixo por grupo, `jitter_do_espaco`: SHA-256 do tipo e do id), para os grupos não dispararem todos no mesmo minuto; `!daily`, `!weekly` e `!group` avisam "may arrive up to 20 min earlier or later".
 `!weekly mon 9h`, `!weekly size 3`, `!weekly off`; `!weekly now` começa na hora; ver: todos, mudar: admins
@@ -284,7 +285,8 @@ _🏆 Weekly challenge · 1/3 — tag me to answer_
   (`Tutor.weekly_answer`), que julga se a resposta é **coerente com a pergunta no geral** (M37: usar as
   palavras do vocabulário não é exigido nem pesa contra; usá-las só melhora); a pergunta **só avança
   quando a pessoa marcada responde** ou alguém pula (`3`/`skip`); `skipall`/`0`/`stop` encerra com o
-  resumo. Sem nota SM-2. `respostas/` registra a participação.
+  resumo. Não mexe no cartão nem alimenta a memória por aluno; só a consome (M65, seção 5.7).
+  `respostas/` registra a participação.
 - `1`: turma A1-A2/A2-B1 vê **🇧🇷 português e depois 🇺🇸 inglês**; de B1-B2 em diante, só inglês. `2`: a
   pergunta em voz (Cloud TTS, cache existente). `/1`, `/2`, `/3` (ou marcar o bot com `1`, `2`, `3`) valem no grupo.
 - Fecha sozinho após 3 h sem mensagem; o semanal tem precedência sobre a diária no mesmo tick.
@@ -412,10 +414,29 @@ Send me another word or expression whenever you want.
   bot **sai dele depois de 24 h**, sem mandar mensagem. Configure no celular do bot: Privacidade →
   Grupos → "Meus contatos".
 
-### 5.7 Revisão espaçada (M10, ADR-0011, ADR-0012)
+### 5.7 Revisão espaçada (M65, ADR-0064, ADR-0012)
 
-O agendamento das palavras segue o SM-2 simplificado de `app/domain/srs.py` (a nota vem do
-julgamento da IA sobre a resposta em texto livre). No grupo, quem inicia as rodadas é a **revisão
+**Memória por aluno** (`app/domain/memoria.py`, puro, sem IA): calculada a cada uso a partir de
+`respostas/` com `tipo="diaria"` dos últimos 90 dias (`JANELA`). Cada par (aluno, palavra) é uma caixa
+de Leitner: acerto (`qualidade != de_novo`) sobe uma caixa (até 5), erro volta para 0. A chance de
+lembrar é `0.9 ** (dias desde o último acerto / prazo da caixa)`, prazos 1, 3, 7, 14 e 30 dias; quem
+errou por último tem 0. Quem nunca respondeu a palavra recebe `min(0.5, (taxa do aluno + taxa da
+palavra) / 2)` (taxas de acerto com suavização de Laplace). **Alunos ativos** são os alunos elegíveis
+(sem staff nem o bot) com ao menos uma resposta da diária na janela; a **cobertura** de uma palavra é a
+média da chance entre eles. **O desafio semanal só consome a memória**: suas respostas (`tipo="semanal"`)
+e as sem `tipo` (anteriores ao M58) não entram.
+
+**Cartão do grupo** (`app/domain/srs.py:reagendar`), quando a diária avança uma palavra: cobertura
+`>= 0.75` sobe uma caixa do grupo, `< 0.5` desce uma e conta um lapso, entre os dois (ou sem aluno
+ativo) fica; o próximo prazo é o da caixa, 1, 3, 7, 14 ou 30 dias (`repeticoes` guarda a caixa, de 0 a
+4; `facilidade` do SM-2 do ADR-0011 ficou sem uso). `skip` continua sem mexer no cartão.
+
+**Desafio semanal:** o vocabulário passado à IA começa pelas palavras de maior necessidade da turma
+(1 - cobertura; o critério antigo, recentes primeiro, desempata). A necessidade de cada aluno elegível
+por palavra vai para `session/current.semanal_foco`; quando o rodízio marca alguém, das perguntas que
+faltam vai a que soma mais necessidade dele nas palavras da pergunta (empate: a ordem da IA).
+
+No grupo, quem inicia as rodadas é a **revisão
 diária** e o **desafio semanal** (seção 5.2b); o tamanho da rodada é `LIMITE_POR_SESSAO_GRUPO` (5)
 ou o fixado em `!daily ... size N`. Os lembretes N vezes por dia do privado (`/reminders`,
 `/reviewsize`) saíram deste projeto (ADR-0062). O agendador (`app/services/lembretes.py`) roda no
@@ -548,7 +569,8 @@ entries/{slug}             { palavra, classe, cefr_estimado, sentido:{traducao,d
                            # M23: links (gs://) dos áudios de pronúncia; só registro, o cache por hash manda
                            # M12: sinonimos = [{expressao, significado, exemplo}] já mostrados ao aluno
                            # M10: campos de SM-2 simplificado (ADR-0011); proxima_revisao=None
-                           # é um cartão novo, vencido desde já
+                           # é um cartão novo, vencido desde já. M65 (ADR-0064): repeticoes é a caixa do
+                           # grupo (0-4), intervalo_dias o prazo dela; facilidade ficou sem uso
                            # M28 (seção 12): autor_id é quem salvou, só em grupo (None no privado)
 entries/{slug}/sentences/{auto}  { texto, autor:"usuario"|"bot", autor_id?, veredito?, correcoes?, versao_natural?, explicacao?, criado_em }
                            # M12: versao_natural é a frase do aluno já corrigida pela IA (também nas revisões)
@@ -565,6 +587,7 @@ espacos/{grupo}/respostas/{auto}  { entry, autor_id, marcado, qualidade, tipo?:"
                            # semanal_tamanho?, proxima_semanal; session/current ganha semanal_perguntas, semanal_indice,
                            # semanal_respondidas, semanal_puladas (estado WEEKLY_QUIZ; marcado_id/marcacao_expira_em reaproveitados);
                            # no grupo `proximo_tick` espelha o menor entre proxima_diaria e proxima_semanal
+                           # M65: session/current ganha semanal_foco {aluno: {slug: necessidade}} (WEEKLY_QUIZ)
                            # M35: profile/me ganha diaria_ligada, diaria_hora, diaria_minuto, diaria_fim_de_semana,
                            # proxima_diaria, revisoes_sem_resposta; session/current ganha revisao_puladas;
                            # no grupo `proximo_tick` espelha `proxima_diaria`; marcacao_expira_em = fechamento por inatividade (3h)
@@ -708,6 +731,7 @@ Crie a interface `Channel` (enviar texto, enviar arquivo, enviar voz, marcar com
 | M62 | `/ranking` em PDF e nome do grupo (seções 5.2/7.1, ADR-0060): `services/relatorio_ranking.py` + `templates/ranking.html.j2` (Jinja2 + WeasyPrint), `admin.Arquivo`, `!activate <nome>` grava/renomeia (`Repository.renomear_grupo`), `group_name` aceita `Name` do GOWS, pango no Dockerfile | `make check` passa; `/ranking` manda um `.pdf` com o nome real das turmas; `!activate Turma A` num grupo ativo renomeia; `docker build` importa o WeasyPrint |
 | M63 | Ranking mostra número e nome salvo, sem Daily/Weekly (seção 5.2, ADR-0061): `LinhaAluno.numero`, coluna "Number" no PDF | `make check` passa; o PDF traz o nome (ou "—") e o `+número` de cada aluno, sem as colunas Daily e Weekly |
 | M64 | Infra em Terraform e projeto GCP próprio `stick-word-group` (seção 10, ADR-0063): `infra/terraform/` substitui os `infra/setup*.sh`; recursos renomeados de `vocabot`/`anki-whatsapp` para `stick-word-group` | `terraform validate` passa; `terraform plan` logo após o `apply` não mostra mudanças; o estado não contém valor de segredo; `make check` passa |
+| M65 | Memória por aluno no grupo (seção 5.7, ADR-0064, substitui o ADR-0011): `domain/memoria.py` (Leitner por aluno a partir de `respostas/` da diária), `srs.reagendar` por cobertura da turma, vocabulário e pergunta do semanal pela necessidade de quem é marcado (`semanal_foco`); o semanal só consome | `make check` passa; um acerto só não sobe a palavra se a turma não mostrou que sabe; com um aluno ativo, o acerto dele sobe; erros de outros derrubam; o vocabulário do semanal começa pelo que a turma esquece; cada marcado recebe a pergunta da palavra que ele errou; responder o semanal não mexe na memória nem no cartão |
 
 **Opcional antes do M8:** subir o compose localmente (`docker compose up`) e parear um teste no próprio computador. Se fizer isso, use um volume de sessão separado, porque o número só pode ter uma sessão do WAHA ativa por vez.
 
@@ -845,7 +869,7 @@ stick-word-group/
   app/
     main.py  config.py  messages.py
     channel/  base.py  waha.py  console.py  parser.py
-    domain/   models.py  state.py  choices.py  srs.py  lembretes.py  musica.py
+    domain/   models.py  state.py  choices.py  srs.py  memoria.py  lembretes.py  musica.py
     flows/    router.py  capture.py  practice.py  pronuncia.py  expansion.py  synonyms.py  freeform.py  review.py  song.py  commands.py
     services/ llm.py  prompts.py  planilha.py  storage.py  lembretes.py  letras.py  tts.py  audio.py  transcricao.py  fake_transcricao.py   # M39
               log_handler.py  snapshot.py  metricas_destino.py   # M27/M28
