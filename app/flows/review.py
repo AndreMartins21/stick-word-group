@@ -4,8 +4,9 @@ por vez (pergunta → resposta → feedback + próxima) e fecha com o resumo. `m
 vem seguido da pronúncia automática do termo, sem a frase (M26, ADR-0027).
 
 Em grupo (M35, ADR-0033) é a revisão diária: ninguém é marcado, qualquer um responde e recebe
-feedback; a primeira resposta aceitável (qualidade != `de_novo`) vale a nota e avança; `skip` pula a
-palavra e `skipall` encerra. Sem mensagem por 3 horas, a rodada fecha sozinha. Os ajudantes de
+feedback; a primeira resposta aceitável (qualidade != `de_novo`) avança; `skip` pula a palavra e
+`skipall` encerra. Desde o M65 (ADR-0064), quem decide quando a palavra volta é a cobertura da turma
+(`domain/memoria.py`), não a nota de quem acertou primeiro. Sem mensagem por 3 horas, a rodada fecha sozinha. Os ajudantes de
 marcação (`alunos_elegiveis`, `marcar`) são do desafio semanal (`flows/semanal.py`, ADR-0034).
 """
 
@@ -17,6 +18,7 @@ from datetime import datetime
 
 from app import messages
 from app.channel.parser import numero_esta_na_lista
+from app.domain.memoria import JANELA, Memoria, cobertura
 from app.domain.models import Entry, Estado, Membro, Profile, Resposta, Sentence, Sessao
 from app.domain.rodizio import Candidato, escolher
 from app.domain.srs import reagendar, vencida
@@ -113,6 +115,11 @@ async def marcar(
     return escolhido
 
 
+async def memoria_da_turma(d: Deps) -> Memoria:
+    """A memória por aluno (M65), das respostas da diária dentro da `JANELA`."""
+    return Memoria.de(await bloq(d.repo.listar_respostas, d.agora() - JANELA))
+
+
 # --- a rodada ---------------------------------------------------------------------------------
 
 
@@ -188,14 +195,15 @@ async def responder(d: Deps, sessao: Sessao, perfil: Profile, texto: str) -> Ses
         await d.conversa.enviar(messages.diaria_tente_de_novo(revisao, nome, d.p))
         return sessao
 
-    agendamento = reagendar(entrada, revisao.qualidade, agora)
+    alunos = [numero for numero, _ in await alunos_elegiveis(d, atualizar=False)]
+    memoria = await memoria_da_turma(d)
+    agendamento = reagendar(entrada, cobertura(alunos, entrada.slug, memoria, agora), agora)
     await bloq(
         d.repo.salvar_entrada,
         entrada.model_copy(
             update={
                 "repeticoes": agendamento.repeticoes,
                 "intervalo_dias": agendamento.intervalo_dias,
-                "facilidade": agendamento.facilidade,
                 "proxima_revisao": agendamento.proxima_revisao,
                 "lapsos": agendamento.lapsos,
                 "revisada_em": agora,

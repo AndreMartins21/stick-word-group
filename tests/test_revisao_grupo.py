@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app import messages
-from app.domain.models import Entry, Estado, Profile, Revisao, SentidoSalvo
+from app.domain.models import Entry, Estado, Membro, Profile, Resposta, Revisao, SentidoSalvo
 from app.services.audio import ServicoAudio
 from app.services.fake_llm import FakeTutor
 from app.services.fake_tts import FakeSintetizador
@@ -300,3 +300,64 @@ async def test_perfil_do_grupo_novo_tem_a_diaria_padrao() -> None:
         19,
         False,
     )
+
+
+# --- M65 (ADR-0064): quem decide quando a palavra volta é a turma -----------------------------
+
+
+def _ja_respondeu(m: Montagem, *autores: str) -> None:
+    """Deixa cada autor como aluno ativo: uma resposta certa da diária numa outra palavra."""
+    repo = m.banco.do_espaco(GRUPO)
+    for autor in autores:
+        repo.salvar_membro(autor, Membro())
+        repo.registrar_resposta(
+            Resposta(
+                entry="outra",
+                autor_id=autor,
+                marcado=False,
+                qualidade="bom",
+                tipo="diaria",
+                criado_em=T0 - timedelta(days=1),
+            )
+        )
+
+
+async def test_um_acerto_so_nao_sobe_a_palavra_se_a_turma_nao_mostrou_que_sabe() -> None:
+    m = _turma()
+    _ja_respondeu(m, ANA.numero, BIA.numero, CAIO.numero)
+    await m.diz_no_grupo(ANA, "!review")
+
+    await m.diz_no_grupo(BIA, "!it means to stop")
+
+    entrada = m.banco.do_espaco(GRUPO).obter_entrada("w0")
+    assert entrada is not None
+    # Bia lembra (1.0); Ana e Caio nunca responderam w0 (0.5 cada): cobertura 0.67, caixa fica.
+    assert entrada.repeticoes == 0 and entrada.lapsos == 0
+    assert entrada.proxima_revisao == T0 + timedelta(days=1)
+
+
+async def test_com_um_aluno_ativo_o_acerto_dele_sobe_a_palavra() -> None:
+    m = _turma()
+    await m.diz_no_grupo(ANA, "!review")  # Ana nunca respondeu a diária: não conta
+
+    await m.diz_no_grupo(BIA, "!it means to stop")
+
+    entrada = m.banco.do_espaco(GRUPO).obter_entrada("w0")
+    assert entrada is not None and entrada.repeticoes == 1
+    assert entrada.proxima_revisao == T0 + timedelta(days=3)
+
+
+async def test_erros_de_outros_alunos_derrubam_a_palavra_mesmo_com_um_acerto() -> None:
+    """Antes (ADR-0011) só o primeiro acerto contava; agora os erros também pesam."""
+    m = _turma(revisoes=[_de_novo(), _de_novo(), _bom()])
+    m.banco.do_espaco(GRUPO).salvar_entrada(_palavras(1)[0].model_copy(update={"repeticoes": 2}))
+    await m.diz_no_grupo(ANA, "!review")
+
+    await m.diz_no_grupo(ANA, "!a color")
+    await m.diz_no_grupo(CAIO, "!a fruit")
+    await m.diz_no_grupo(BIA, "!it means to stop")
+
+    entrada = m.banco.do_espaco(GRUPO).obter_entrada("w0")
+    assert entrada is not None
+    assert entrada.repeticoes == 1 and entrada.lapsos == 1  # cobertura 1/3: desce uma caixa
+    assert entrada.proxima_revisao == T0 + timedelta(days=3)
