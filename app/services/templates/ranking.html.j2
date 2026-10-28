@@ -15,7 +15,11 @@
   tr { page-break-inside: avoid; }
   .n { text-align: right; white-space: nowrap; }
   .pos { width: 9mm; }
-  .nota { color: #777; font-size: 8pt; margin-top: 1.5mm; }
+  .regra { background: #fff8e1; border-left: 1.2mm solid #f0b400; padding: 2mm 3mm; margin-bottom: 2mm; font-size: 8.5pt; }
+  .explica { background: #eef3f9; border-left: 1.2mm solid #1d4e89; padding: 2mm 3mm; margin-bottom: 2.5mm; font-size: 8.5pt; page-break-inside: avoid; }
+  .explica p { margin: 0 0 1mm; }
+  .explica ul { margin: 0; padding-left: 4mm; }
+  .explica li { margin: 0.6mm 0; }
   .turma { margin-top: 3mm; page-break-inside: avoid; }
   .turma h3 { font-size: 10pt; margin: 0 0 1mm; }
 </style>
@@ -23,8 +27,15 @@
 <body>
 <h1>{{ t.titulo }}</h1>
 <div class="sub">{{ t.periodo }} · {{ t.gerado }}</div>
+<div class="regra">{{ t.regra }}</div>
+
+{% macro explica(chave) %}{% set intro, colunas = e[chave] %}
+<div class="explica"><p>{{ intro }}</p>
+{% if colunas %}<ul>{% for coluna, sentido in colunas %}<li><b>{{ coluna }}</b>: {{ sentido }}</li>{% endfor %}</ul>{% endif %}
+</div>{% endmacro %}
 
 <h2>{{ t.alunos_titulo }}</h2>
+{{ explica("alunos") }}
 <table>
   <tr><th class="pos">#</th><th>{{ t.col_aluno }}</th><th>{{ t.col_numero }}</th><th>{{ t.col_turmas }}</th>
       <th class="n">{{ t.col_total }}</th><th class="n">{{ t.col_dias }}</th></tr>
@@ -33,9 +44,9 @@
       <td class="n">{{ a.total }}</td><td class="n">{{ a.dias }}</td></tr>
   {% endfor %}
 </table>
-<div class="nota">{{ t.nota_alunos }}</div>
 
 <h2>{{ t.turmas_titulo }}</h2>
+{{ explica("turmas") }}
 <table>
   <tr><th class="pos">#</th><th>{{ t.col_turma }}</th><th class="n">{{ t.col_por_aluno }}</th>
       <th class="n">{{ t.col_total }}</th><th class="n">{{ t.col_ativos }}</th></tr>
@@ -45,9 +56,9 @@
       <td class="n">{{ c.ativos }}/{{ c.alunos }}</td></tr>
   {% endfor %}
 </table>
-<div class="nota">{{ t.nota_turmas }}</div>
 
 <h2>{{ t.destaques_titulo }}</h2>
+{{ explica("destaques") }}
 {% for nome, top in ranking.por_turma %}
 <div class="turma"><h3>{{ nome }}</h3>
 <table>
