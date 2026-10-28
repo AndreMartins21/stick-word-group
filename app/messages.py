@@ -571,13 +571,65 @@ def ranking_pdf_textos(ranking: RankingGeral, meses: int, gerado_em: datetime) -
         "col_turmas": "Class",
         "col_total": "Total",
         "col_dias": "Active days",
-        "nota_alunos": "Answers in the daily review and the weekly challenge. Teachers are left out.",
         "turmas_titulo": f"Top {len(ranking.turmas)} classes",
         "col_turma": "Class",
         "col_por_aluno": "Per student",
         "col_ativos": "Active",
-        "nota_turmas": "Ordered by answers per enrolled student, so small classes compete fairly.",
         "destaques_titulo": "Most engaged in each class",
+        "regra": (
+            f"How it counts: one answer = one reply a student sent to the daily review or to the "
+            f"weekly challenge in the {_periodo(meses)}. Adding words to the vocabulary doesn't "
+            "count. Teachers, admins and the owner are left out of every number."
+        ),
+    }
+
+
+def ranking_pdf_explicacoes(meses: int) -> dict[str, tuple[str, list[tuple[str, str]]]]:
+    """O quadro acima de cada tabela do PDF do /ranking: o que a tabela mostra e cada coluna."""
+    periodo = _periodo(meses)
+    return {
+        "alunos": (
+            "The students who answered the most, adding up every class they're in. "
+            "Ordered by Total; a tie goes to whoever has more Active days.",
+            [
+                ("Student", "the name saved on WhatsApp (— if the bot never saw it)."),
+                ("Class", "the classes where the student answered."),
+                (
+                    "Total",
+                    f"how many answers the student sent in the {periodo}. "
+                    "Example: 25 = 25 replies to the review or the challenge.",
+                ),
+                (
+                    "Active days",
+                    "on how many different days the student answered at least once "
+                    "(Brazil time). Example: 25 answers in 5 active days = a few big sessions; "
+                    "25 in 20 days = a steady habit.",
+                ),
+            ],
+        ),
+        "turmas": (
+            "The classes compared with each other. Ordered by Per student, not by Total, "
+            "so a small class can beat a big one.",
+            [
+                ("Total", f"all the answers the class's students sent in the {periodo}."),
+                (
+                    "Per student",
+                    "Total divided by the number of students in the class, counting the ones "
+                    "who never answered. Example: 120 answers in a class of 10 students = 12.0. "
+                    "It's the average effort of the class.",
+                ),
+                (
+                    "Active",
+                    "students who answered at least once / students in the class. "
+                    "Example: 8/10 = 8 of the 10 students took part; 2 didn't answer at all.",
+                ),
+            ],
+        ),
+        "destaques": (
+            "The top 3 students inside each class. The last number is how many answers "
+            f"the student sent in that class in the {periodo} (their Total there).",
+            [],
+        ),
     }
 
 

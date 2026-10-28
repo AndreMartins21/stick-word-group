@@ -55,3 +55,15 @@ def test_nome_com_html_e_escapado_e_nao_vira_marcacao() -> None:
 
     assert "<b>Evil</b> & Co" in texto
     assert "Last month" in texto
+
+
+def test_cada_tabela_explica_como_ler_as_colunas() -> None:
+    # Sem espaços: o pypdf parte "Total" em "T otal" por causa do kerning.
+    texto = "".join(_texto(gerar_pdf_ranking(_ranking(), 6, AGORA)).split())
+
+    assert "oneanswer=onereply" in texto and "last6months" in texto
+    assert "OrderedbyTotal" in texto  # alunos
+    assert "Activedays:onhowmanydifferentdays" in texto
+    assert "Perstudent:Totaldividedbythenumberofstudents" in texto  # turmas
+    assert "Active:studentswhoansweredatleastonce" in texto
+    assert "top3studentsinsideeachclass" in texto  # destaques

@@ -29,6 +29,7 @@ def gerar_pdf_ranking(ranking: Ranking, meses: int, gerado_em: datetime) -> byte
     html = _AMBIENTE.get_template("ranking.html.j2").render(
         ranking=ranking,
         t=messages.ranking_pdf_textos(ranking, meses, gerado_em),
+        e=messages.ranking_pdf_explicacoes(meses),
     )
     pdf: bytes = HTML(string=html).write_pdf()  # sem stubs: o mypy vê Any
     return pdf
