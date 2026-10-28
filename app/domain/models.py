@@ -8,11 +8,18 @@ import re
 import unicodedata
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 NivelUsuario = Literal["A1-A2", "A2-B1", "B1-B2", "B2-C1", "C1-C2", "C2"]
+NIVEIS: tuple[NivelUsuario, ...] = get_args(NivelUsuario)  # do mais básico ao mais avançado
+
+
+def ordem_do_nivel(nivel: str | None) -> int:
+    """Posição do nível em `NIVEIS`; sem nível (ou desconhecido) vai para o fim."""
+    return NIVEIS.index(nivel) if nivel in NIVEIS else len(NIVEIS)
+
 
 # De B1-B2 para cima a turma não vê português (M34, ADR-0032).
 NIVEIS_SO_INGLES: frozenset[str] = frozenset({"B1-B2", "B2-C1", "C1-C2", "C2"})
