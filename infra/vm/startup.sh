@@ -2,7 +2,7 @@
 # Roda como root a cada boot da VM (metadata startup-script). Idempotente.
 set -Eeuo pipefail
 
-log() { logger -t vocabot-startup "$*"; echo "[vocabot-startup] $*"; }
+log() { logger -t stick-word-group-startup "$*"; echo "[stick-word-group-startup] $*"; }
 
 # 1. Swap de 2 GB: a e2-micro tem 1 GB de RAM.
 if ! swapon --show=NAME --noheadings | grep -q '/swapfile'; then
@@ -42,6 +42,6 @@ if [[ ! -f /etc/docker/daemon.json ]] || [[ "$(cat /etc/docker/daemon.json)" != 
 fi
 
 # 4. Diretório do app e Docker ligado no boot.
-mkdir -p /opt/vocabot
+mkdir -p /opt/stick-word-group
 systemctl enable --now docker
 log "pronto"

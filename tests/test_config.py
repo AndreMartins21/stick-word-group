@@ -299,11 +299,11 @@ def test_audio_e_opcional_e_a_voz_tem_padrao(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_audio_bucket_e_voz_configurados(monkeypatch: pytest.MonkeyPatch) -> None:
-    _com_env(monkeypatch, AUDIO_BUCKET="proj-vocabot-audio", TTS_VOICE="en-US-Neural2-D")
+    _com_env(monkeypatch, AUDIO_BUCKET="proj-audio", TTS_VOICE="en-US-Neural2-D")
 
     settings = Settings(_env_file=None)
 
-    assert settings.audio_bucket == "proj-vocabot-audio"
+    assert settings.audio_bucket == "proj-audio"
     assert settings.tts_voice == "en-US-Neural2-D"
 
 
@@ -316,11 +316,11 @@ def test_metrics_bucket_e_opcional(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_metrics_bucket_configurado(monkeypatch: pytest.MonkeyPatch) -> None:
-    _com_env(monkeypatch, METRICS_BUCKET="proj-vocabot-metrics")
+    _com_env(monkeypatch, METRICS_BUCKET="proj-metrics")
 
     settings = Settings(_env_file=None)
 
-    assert settings.metrics_bucket == "proj-vocabot-metrics"
+    assert settings.metrics_bucket == "proj-metrics"
 
 
 def test_prod_exige_a_chave_hmac_do_webhook(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -7,7 +7,7 @@ IFS=$'\n\t'
 # shellcheck source=infra/config.sh
 source "$(dirname "${BASH_SOURCE[0]}")/config.sh"
 
-# O script remoto roda inteiro como root (o /opt/vocabot é modo 700) e lê a API key do .env da VM
+# O script remoto roda inteiro como root (o /opt/stick-word-group é modo 700) e lê a API key do .env da VM
 # sem nunca imprimi-la. O sucesso só vale se ele chegou ao fim e imprimiu o marcador SMOKE_OK (um
 # exit 0 sozinho não prova nada).
 saida="$(gcloud compute ssh "$VM_NAME" "${SSH_FLAGS[@]}" --command "sudo bash -s" \

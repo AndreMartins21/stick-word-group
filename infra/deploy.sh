@@ -18,7 +18,7 @@ trap 'rm -rf "$TMP"' EXIT
 chmod 700 "$TMP"
 
 # Só o que a imagem precisa (sem .git, .env*, tests, evals, docs...).
-(cd "$RAIZ_DIR" && tar czf "$TMP/vocabot.tgz" \
+(cd "$RAIZ_DIR" && tar czf "$TMP/stick-word-group.tgz" \
   Dockerfile docker-compose.yml .dockerignore pyproject.toml uv.lock app)
 
 # Valores NÃO secretos do .env (os segredos entram na VM, direto do Secret Manager).
@@ -59,11 +59,11 @@ chmod 700 "$TMP"
   printf 'AUDIO_BUCKET=%s\n' "$AUDIO_BUCKET"
   printf 'TTS_VOICE=%s\n' "$TTS_VOICE"
   printf 'METRICS_BUCKET=%s\n' "$METRICS_BUCKET"
-} > "$TMP/vocabot.env.base"
+} > "$TMP/stick-word-group.env.base"
 
 echo "==> Copiando para $VM_NAME (via IAP)"
 gcloud compute scp "${SSH_FLAGS[@]}" \
-  "$TMP/vocabot.tgz" "$TMP/vocabot.env.base" "$INFRA_DIR/vm/render_e_subir.sh" \
+  "$TMP/stick-word-group.tgz" "$TMP/stick-word-group.env.base" "$INFRA_DIR/vm/render_e_subir.sh" \
   "$VM_NAME":/tmp/
 
 echo "==> Renderizando o .env e subindo o compose na VM"

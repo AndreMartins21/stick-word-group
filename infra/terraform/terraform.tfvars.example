@@ -1,0 +1,7 @@
+# `cp terraform.tfvars.example terraform.tfvars` e preencha. O terraform.tfvars não é versionado.
+# Nada aqui é segredo: os valores dos segredos do WAHA são gerados pelo próprio Terraform e vão
+# direto para o Secret Manager, sem passar pelo estado (secret_data_wo).
+project_id      = "stick-word-group"
+billing_account = "" # gcloud billing projects describe <projeto> --format='value(billingAccountName)'
+alerta_email    = ""
+# llm_provider  = "anthropic"

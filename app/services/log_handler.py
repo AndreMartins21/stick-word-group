@@ -15,4 +15,4 @@ from google.cloud import logging as cloud_logging
 def criar_handler_da_nuvem(projeto: str) -> logging.Handler:
     """`BackgroundThreadTransport` (padrão da lib): não bloqueia quem chama esperando rede."""
     cliente = cloud_logging.Client(project=projeto)
-    return cloud_logging.handlers.CloudLoggingHandler(cliente, name="vocabot")
+    return cloud_logging.handlers.CloudLoggingHandler(cliente, name="stick-word-group")

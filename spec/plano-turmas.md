@@ -1,4 +1,4 @@
-# Plano noturno — Vocabot para turmas (multiusuário + grupos + revisão com menção)
+# Plano noturno — stick-word-group para turmas (multiusuário + grupos + revisão com menção)
 
 Leia este arquivo inteiro, depois o `CLAUDE.md` / `spec/spec-inicial.md` e os ADRs em `docs/adr/`.
 Este plano estende a spec. Onde ele mudar uma restrição dela, a mudança vira ADR (indicado em cada

@@ -10,7 +10,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/config.sh"
 SEGREDO="ANTHROPIC_API_KEY"
 
 if ! existe gcloud secrets describe "$SEGREDO" --project "$PROJECT_ID"; then
-  echo "O segredo $SEGREDO não existe; rode antes: LLM_PROVIDER=anthropic bash infra/setup.sh" >&2
+  echo "O segredo $SEGREDO não existe; crie-o antes com llm_provider = 'anthropic' no infra/terraform" >&2
   exit 1
 fi
 

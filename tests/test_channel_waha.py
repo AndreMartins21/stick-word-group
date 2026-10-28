@@ -156,7 +156,7 @@ async def test_send_file_manda_o_arquivo_em_base64() -> None:
 
     canal = _canal(httpx.MockTransport(handler))
     await canal.send_file(
-        "5531999998888@c.us", "vocabot.xlsx", b"conteudo", "application/x-teste", "legenda"
+        "5531999998888@c.us", "stick-word-group.xlsx", b"conteudo", "application/x-teste", "legenda"
     )
     await canal.aclose()
 
@@ -167,7 +167,7 @@ async def test_send_file_manda_o_arquivo_em_base64() -> None:
         "chatId": "5531999998888@c.us",
         "file": {
             "mimetype": "application/x-teste",
-            "filename": "vocabot.xlsx",
+            "filename": "stick-word-group.xlsx",
             "data": base64.b64encode(b"conteudo").decode(),
         },
         "caption": "legenda",
@@ -352,7 +352,11 @@ async def test_bot_ids_le_o_numero_e_o_lid_do_me_e_guarda_o_resultado() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         chamadas.append(request.url.path)
-        me = {"id": "553199051491@c.us", "lid": "119302179033090@lid", "pushName": "Anki Zap"}
+        me = {
+            "id": "553199051491@c.us",
+            "lid": "119302179033090@lid",
+            "pushName": "Stick Word Group",
+        }
         return httpx.Response(200, json={"name": "default", "status": "WORKING", "me": me})
 
     canal = _canal(httpx.MockTransport(handler))

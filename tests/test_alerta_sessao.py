@@ -6,14 +6,14 @@ import re
 from pathlib import Path
 
 RAIZ = Path(__file__).parent.parent
-SCRIPT = (RAIZ / "infra" / "setup_alerta_sessao.sh").read_text(encoding="utf-8")
+ALERTA = (RAIZ / "infra" / "terraform" / "monitoring.tf").read_text(encoding="utf-8")
 MAIN = (RAIZ / "app" / "main.py").read_text(encoding="utf-8")
 RUNBOOK = RAIZ / "docs" / "runbooks" / "banimento-do-numero.md"
 
 
 def _filtro() -> str:
-    achado = re.search(r"^FILTRO='(.+)'$", SCRIPT, re.MULTILINE)
-    assert achado, "o script precisa definir FILTRO"
+    achado = re.search(r"filtro_sessao_caiu = <<-EOT\n\s*(.+)\n", ALERTA)
+    assert achado, "o monitoring.tf precisa definir local.filtro_sessao_caiu"
     return achado[1]
 
 
@@ -34,4 +34,4 @@ def test_o_runbook_existe_e_cobre_os_dois_casos() -> None:
 
     for trecho in ("BOT_NUMBER", "infra/pair.sh", "número reserva", "!activate", "Modelo de aviso"):
         assert trecho in texto, trecho
-    assert "banimento-do-numero.md" in SCRIPT  # o alerta aponta para o runbook
+    assert "banimento-do-numero.md" in ALERTA  # o alerta aponta para o runbook

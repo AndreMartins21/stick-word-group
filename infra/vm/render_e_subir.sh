@@ -7,10 +7,10 @@ umask 077
 
 PROJECT_ID="${1:?PROJECT_ID}"
 LLM_PROVIDER="${2:?LLM_PROVIDER}"
-RAIZ=/opt/vocabot
+RAIZ=/opt/stick-word-group
 
 mkdir -p "$RAIZ/app"
-tar xzf /tmp/vocabot.tgz -C "$RAIZ/app"
+tar xzf /tmp/stick-word-group.tgz -C "$RAIZ/app"
 
 segredos=(WAHA_API_KEY WAHA_DASHBOARD_PASSWORD WAHA_HOOK_HMAC_KEY)
 if [[ "$LLM_PROVIDER" == "anthropic" ]]; then
@@ -18,14 +18,14 @@ if [[ "$LLM_PROVIDER" == "anthropic" ]]; then
 fi
 
 {
-  cat /tmp/vocabot.env.base
+  cat /tmp/stick-word-group.env.base
   for nome in "${segredos[@]}"; do
     printf '%s=%s\n' "$nome" "$(gcloud secrets versions access latest --secret="$nome" --project="$PROJECT_ID")"
   done
 } > "$RAIZ/.env.novo"
 chmod 600 "$RAIZ/.env.novo"
 mv "$RAIZ/.env.novo" "$RAIZ/.env"
-rm -f /tmp/vocabot.tgz /tmp/vocabot.env.base
+rm -f /tmp/stick-word-group.tgz /tmp/stick-word-group.env.base
 
 cd "$RAIZ/app"
 docker compose --env-file "$RAIZ/.env" up -d --build

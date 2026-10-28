@@ -67,7 +67,7 @@ class DestinoLocal:
 
 
 class DestinoGcs:
-    """O bucket de métricas em produção (`infra/setup_metricas.sh`): só a SA da VM escreve nele,
+    """O bucket de métricas em produção (`infra/terraform/storage.tf`): só a SA da VM escreve nele,
     sem leitura de outros buckets nem acesso ao BigQuery (ver ADR-0029)."""
 
     def __init__(self, *, bucket: Any) -> None:

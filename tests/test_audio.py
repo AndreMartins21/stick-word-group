@@ -132,14 +132,14 @@ class _BlobFalso:
 
 def test_cache_gcs_devolve_none_no_miss_e_guarda_ogg() -> None:
     guardados: dict[str, bytes] = {}
-    bucket = SimpleNamespace(name="proj-vocabot-audio", blob=lambda n: _BlobFalso(guardados, n))
+    bucket = SimpleNamespace(name="proj-audio", blob=lambda n: _BlobFalso(guardados, n))
     cache = CacheAudioGcs(bucket=bucket)
 
     assert cache.obter("audio/a.ogg") is None
     cache.guardar("audio/a.ogg", b"xyz")
 
     assert cache.obter("audio/a.ogg") == b"xyz"
-    assert cache.uri("audio/a.ogg") == "gs://proj-vocabot-audio/audio/a.ogg"
+    assert cache.uri("audio/a.ogg") == "gs://proj-audio/audio/a.ogg"
 
 
 def test_google_tts_pede_ogg_opus_com_a_voz_e_o_idioma_dela() -> None:
