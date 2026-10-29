@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>stick-word-group guide</title>
+<style>
+  @page {
+    size: A4;
+    margin: 18mm 16mm 18mm 16mm;
+    @bottom-center { content: "stick-word-group · class guide · " counter(page); font: 8pt "DejaVu Sans", sans-serif; color: #8a8f98; }
+  }
+  @page :first { @bottom-center { content: none; } }
+  :root { --ink:#1d232b; --mute:#5b6470; --line:#e3e6ea; --brand:#0f7b5f; --brand-soft:#e7f4ef; --warn:#b4560b; --warn-soft:#fdf1e6; --chat:#efeae2; --me:#d9fdd3; --bot:#ffffff; }
+  * { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", sans-serif; color: var(--ink); font-size: 9.2pt; line-height: 1.42; margin: 0; background: #fff; }
+  h1, h2, h3 { font-family: "DejaVu Sans", sans-serif; line-height: 1.2; }
+  h2 { font-size: 17pt; margin: 0 0 4mm; color: var(--brand); page-break-after: avoid; }
+  h2 .n { display:inline-block; background: var(--brand); color:#fff; border-radius: 6px; padding: 0 7px; margin-right: 6px; font-size: 13pt; vertical-align: 2px; }
+  h3 { font-size: 12pt; margin: 5mm 0 2mm; page-break-after: avoid; }
+  p { margin: 0 0 2.5mm; }
+  ul { margin: 0 0 3mm; padding-left: 5mm; }
+  li { margin-bottom: 1mm; }
+  code, .cmd { font-family: "DejaVu Sans Mono", monospace; font-size: 8.2pt; background: #f2f4f6; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; white-space: nowrap; }
+  section { margin-top: 9mm; }
+  section.brk { page-break-before: always; margin-top: 0; }
+  .lead { font-size: 11pt; color: var(--mute); margin-bottom: 5mm; }
+
+  /* capa */
+  .cover { height: 255mm; display: flex; flex-direction: column; justify-content: center; }
+  .cover .tag { color: var(--brand); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 10pt; }
+  .cover h1 { font-size: 36pt; margin: 3mm 0 4mm; }
+  .cover .sub { font-size: 14pt; color: var(--mute); max-width: 150mm; }
+  .cover .trial { margin-top: 12mm; border: 2px solid var(--brand); background: var(--brand-soft); border-radius: 10px; padding: 6mm 7mm; max-width: 150mm; }
+  .cover .trial b { color: var(--brand); font-size: 13pt; }
+  .toc { margin-top: 12mm; columns: 2; column-gap: 10mm; font-size: 10.5pt; max-width: 160mm; }
+  .toc div { margin-bottom: 1.5mm; }
+  .toc span { color: var(--brand); font-weight: 700; margin-right: 2mm; }
+
+  /* caixas */
+  .box { border-radius: 8px; padding: 3.5mm 4.5mm; margin: 3mm 0 4mm; page-break-inside: avoid; }
+  .box.tip { background: var(--brand-soft); border-left: 4px solid var(--brand); }
+  .box.warn { background: var(--warn-soft); border-left: 4px solid var(--warn); }
+  .box p:last-child, .box ul:last-child { margin-bottom: 0; }
+  .grid2 { display: flex; gap: 5mm; }
+  .grid2 > * { flex: 1; }
+
+  /* tabelas */
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 8.6pt; page-break-inside: auto; }
+  th { text-align: left; background: #f2f4f6; color: var(--mute); font-weight: 600; font-size: 8.6pt; text-transform: uppercase; letter-spacing: .04em; }
+  th, td { padding: 2mm 2.5mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr { page-break-inside: avoid; }
+  td.who { white-space: nowrap; color: var(--mute); font-size: 8.8pt; }
+  .pill { display:inline-block; border-radius: 10px; padding: 0 6px; font-size: 8pt; font-weight: 700; }
+  .pill.all { background: var(--brand-soft); color: var(--brand); }
+  .pill.adm { background: var(--warn-soft); color: var(--warn); }
+
+  /* chat do WhatsApp */
+  .chat { background: var(--chat); border-radius: 10px; padding: 3.5mm 4mm 2mm; margin: 2mm 0 4mm; page-break-inside: avoid; }
+  .chat .cap { font-size: 8.4pt; color: var(--mute); margin: 0 0 2mm; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+  .msg { max-width: 86%; border-radius: 8px; padding: 1.6mm 2.6mm; margin-bottom: 1.6mm; font-size: 8.5pt; line-height: 1.38; box-shadow: 0 1px 0 rgba(0,0,0,.08); white-space: pre-wrap; }
+  .msg .from { display:block; font-weight: 700; font-size: 8.4pt; margin-bottom: .6mm; white-space: normal; }
+  .msg.me { background: var(--me); margin-left: auto; }
+  .msg.bot { background: var(--bot); }
+  .msg.bot .from { color: var(--brand); }
+  .msg.u1 .from { color: #b03a7a; } .msg.u2 .from { color: #2f62b8; } .msg.u3 .from { color: #8a5a00; }
+  .msg.voice { white-space: normal; color: var(--mute); }
+  .msg .mention { color: #027eb5; }
+  .note { font-size: 8.6pt; color: var(--mute); text-align: center; margin: 0 0 2mm; }
+
+  .steps { counter-reset: s; list-style: none; padding: 0; }
+  .steps li { counter-increment: s; position: relative; padding-left: 9mm; margin-bottom: 2.2mm; }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 6mm; height: 6mm; border-radius: 50%; background: var(--brand); color: #fff; font-weight: 700; font-size: 8.6pt; text-align: center; line-height: 6mm; }
+  .kpi { display:flex; gap: 4mm; margin: 3mm 0 4mm; }
+  .kpi div { flex:1; border: 1px solid var(--line); border-radius: 8px; padding: 3mm; text-align: center; }
+  .kpi b { display:block; font-size: 15pt; color: var(--brand); }
+  .kpi span { font-size: 8.6pt; color: var(--mute); }
+</style>
+</head>
+<body>
+<body>
+
+<!-- ============================== COVER ============================== -->
+<div class="cover">
+  <div class="tag">Class guide</div>
+  <h1>stick-word-group 🇺🇸</h1>
+  <div class="sub">The WhatsApp bot that turns your class group into a living vocabulary notebook: the class collects words, practices with AI, reviews every day and takes on a challenge every week.</div>
+
+  <div class="trial">
+    <b>🎁 Trial period: 2 months free</b>
+    <p style="margin:2mm 0 0">During the trial, the bot is active in the class groups. Everything the class adds is saved, and the engagement ranking shows who took part the most.</p>
+  </div>
+
+  <div class="toc">
+    <div><span>1</span>How the bot works</div>
+    <div><span>2</span>Adding words</div>
+    <div><span>3</span>Practicing a word</div>
+    <div><span>4</span>List, practice and removal</div>
+    <div><span>5</span>Daily review</div>
+    <div><span>6</span>Weekly challenge</div>
+    <div><span>7</span>Engagement ranking</div>
+    <div><span>8</span>Class level and audio</div>
+    <div><span>9</span>All group commands</div>
+    <div><span>10</span>Private chat commands (admins)</div>
+    <div><span>11</span>Limits and FAQ</div>
+  </div>
+</div>
+
+<!-- ============================== 1 ============================== -->
+<section class="brk">
+  <h2><span class="n">1</span>How the bot works</h2>
+  <p class="lead">The bot is a member of the class group. It stays out of the conversation: it only reads what is meant for it.</p>
+
+  <h3>What the bot reads in the group</h3>
+  <div class="grid2">
+    <div class="box tip">
+      <p><b>✅ It reads</b></p>
+      <ul>
+        <li>Messages that <b>tag the bot</b> (type <code>@</code> and pick the bot's contact).</li>
+        <li><b>Replies (quotes)</b> to a bot message: they count as tagging it.</li>
+        <li><b>Commands</b> starting with <code>!</code> or <code>/</code>, like <code>!list</code> or <code>/list</code>.</li>
+        <li><b>Voice notes</b> that reply to (quote) a bot message.</li>
+      </ul>
+    </div>
+    <div class="box warn">
+      <p><b>🙈 It ignores</b></p>
+      <ul>
+        <li>The class's normal conversation: the bot doesn't read it, store it or even mark it as read.</li>
+        <li>Photos, stickers, videos and audio that don't reply to the bot.</li>
+        <li>Tagging or quoting someone else.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Which language it speaks</h3>
+  <p>The bot replies <b>in English</b>, in short messages, to keep the immersion. In beginner classes (<b>A1-A2</b> and <b>A2-B1</b>), each word also comes with the Portuguese translation (the 🇧🇷 line). From <b>B1-B2</b> up, nothing appears in Portuguese.</p>
+
+  <h3>What about private chat?</h3>
+  <div class="box warn">
+    <p><b>Studying happens in the group.</b> In private chat, the bot only serves administrators, and only with the admin commands (section 10). If a student messages it privately, the bot <b>doesn't reply</b>. It's not a bug, it's on purpose.</p>
+  </div>
+
+  <h3>The three activities</h3>
+  <div class="kpi">
+    <div><b>📚 Vocabulary</b><span>any time: someone tags the bot with a word and the class practices</span></div>
+    <div><b>🔁 Daily</b><span>Mon to Fri, ~19:00: 5 of the class's words, anyone can answer</span></div>
+    <div><b>🏆 Weekly</b><span>Friday, ~13:00: one question per student, with a tag</span></div>
+  </div>
+  <p>Answers in the daily review and in the weekly challenge earn points in the <b>engagement ranking</b> (section 7).</p>
+
+  <div class="chat">
+    <p class="cap">Example: the bot ignores the chat and only replies to whoever tags it</p>
+    <div class="msg me u1"><span class="from">Ana</span>hey, did anyone watch yesterday's class?</div>
+    <div class="msg me u2"><span class="from">Bruno</span>yes! the teacher talked about "stall"</div>
+    <div class="msg me u2"><span class="from">Bruno</span><span class="mention">@bot</span> stall | the talks stalled</div>
+    <div class="msg bot"><span class="from">bot</span><b>stall</b> (verb) — B2
+📖 to stop making progress
+...</div>
+    <p class="note">The first two messages are class conversation: the bot doesn't read them. The third one tags the bot.</p>
+  </div>
+</section>
+
+<!-- ============================== 2 ============================== -->
+<section>
+  <h2><span class="n">2</span>Adding words</h2>
+  <p class="lead">Saw a word in class, in a TV show or in a song? Tag the bot with it. The word goes into the class list, and everyone can practice it.</p>
+
+  <table>
+    <tr><th>How to send it</th><th>Example</th><th>What happens</th></tr>
+    <tr><td>Just the word</td><td><code>@bot stall</code></td><td>The AI picks the most common meaning.</td></tr>
+    <tr><td>Word + the sentence where you saw it</td><td><code>@bot stall | the talks stalled</code></td><td>The AI uses the sentence to get the meaning right.</td></tr>
+    <tr><td>Word + the meaning you want</td><td><code>@bot stall | to delay on purpose</code></td><td>The AI explains <b>that</b> meaning (Portuguese works too: <code>stall | enrolar</code>).</td></tr>
+    <tr><td>Expressions, slang</td><td><code>@bot no cap</code>, <code>@bot grind to a halt</code></td><td>Any word at any level works; the AI says when it's slang or informal.</td></tr>
+    <tr><td>As a command</td><td><code>!add stall</code></td><td>Same as tagging the bot.</td></tr>
+  </table>
+
+  <h3>The word "card"</h3>
+  <p>The bot replies with a card: part of speech and level (CEFR), definition, a memory tip and an example sentence. Right after that, it sends <b>two voice notes</b> with the pronunciation: the word and the example sentence.</p>
+
+  <div class="chat">
+    <p class="cap">Example in an A2-B1 class (with the Portuguese line)</p>
+    <div class="msg me u2"><span class="from">Bruno</span><span class="mention">@bot</span> stall</div>
+    <div class="msg bot"><span class="from">bot</span><b>stall</b> (verb) — B2
+🇧🇷 travar, emperrar
+📖 to stop making progress
+💡 Think of a car engine that dies in traffic.
+"The project stalled because the client didn't send the documents."
+
+↔️ enrolar — to delay on purpose
+Want another meaning? Tag me with <b>stall | to delay on purpose</b>
+
+Now, tag me with a sentence using <b>stall</b>, or tag me with a number:
+2️⃣ See more examples
+3️⃣ Check synonyms
+4️⃣ Just save
+5️⃣ Don't save</div>
+    <div class="msg bot voice">🎤 0:01 · voice note: "stall"</div>
+    <div class="msg bot voice">🎤 0:04 · voice note: the example sentence</div>
+  </div>
+
+  <div class="box tip">
+    <p><b>💡 Other meanings:</b> the <b>↔️</b> line shows the word has more than one meaning. To learn the other one, tag the bot with the word, a <code>|</code> bar and the meaning, just as the card suggests.</p>
+  </div>
+
+  <h3>A word that's already on the list</h3>
+  <p>If someone sends a word the class already has, the bot doesn't duplicate it: it lets you know and shows what was already saved.</p>
+  <div class="chat">
+    <div class="msg me u3"><span class="from">Carla</span><span class="mention">@bot</span> stall</div>
+    <div class="msg bot"><span class="from">bot</span>📌 You already have <b>stall</b> in your list.
+
+<b>stall</b> (verb) — B2
+📖 to stop making progress
+"The project stalled because the client didn't send the documents."
+
+Now, tag me with a sentence using <b>stall</b>, or tag me with a number:
+2️⃣ See more examples
+3️⃣ Check synonyms
+
+To send another word or command, type !0 or !skip.</div>
+  </div>
+</section>
+
+<!-- ============================== 3 ============================== -->
+<section>
+  <h2><span class="n">3</span>Practicing a word</h2>
+  <p class="lead">After the card, the word stays "open". Anyone in the class can write a sentence with it or pick a menu option, always tagging the bot.</p>
+
+  <table>
+    <tr><th>You send</th><th>The bot does</th></tr>
+    <tr><td><code>@bot</code> + a sentence with the word</td><td>Corrects the sentence: says whether the meaning is right, shows the corrections, a more natural version and a short explanation.</td></tr>
+    <tr><td><code>@bot 2</code> (or <code>!2</code>)</td><td>3 more example sentences, without repeating the ones already shown.</td></tr>
+    <tr><td><code>@bot 3</code> (or <code>!3</code>)</td><td>Synonyms, each with a meaning and an example.</td></tr>
+    <tr><td><code>@bot 4</code> (or <code>!4</code>)</td><td>Saves and closes the word, and suggests related expressions.</td></tr>
+    <tr><td><code>@bot 5</code> (or <code>!5</code>)</td><td>Discards the word just created. If someone already wrote a sentence with it, it stays on the list.</td></tr>
+    <tr><td><code>@bot</code> + a question</td><td>Answers questions about the word or about English ("how do I pronounce it?", "examples at work").</td></tr>
+    <tr><td><code>@bot</code> + another word</td><td>Saves the current one and explains the new one right away.</td></tr>
+    <tr><td><code>!0</code> or <code>!skip</code></td><td>Leaves the word without deleting anything.</td></tr>
+  </table>
+
+  <div class="chat">
+    <p class="cap">Example: correcting a sentence</p>
+    <div class="msg me u1"><span class="from">Ana</span><span class="mention">@bot</span> The project stalled because the client didn't sent the documents</div>
+    <div class="msg bot"><span class="from">bot</span>⚠️ <b>Almost there!</b> The meaning is right.
+✏️ didn't sent → didn't send
+✨ The project stalled because the client didn't send the documents.
+💬 After "didn't", the verb stays in the base form.
+
+Want to try another sentence?
+Now, tag me with a sentence using <b>stall</b>, or tag me with a number:
+2️⃣ See more examples
+3️⃣ Check synonyms
+4️⃣ Just save
+5️⃣ Don't save</div>
+  </div>
+  <p>The top of the correction gives the result: ✅ <b>Perfect!</b> · 👍 <b>Correct, but a bit unnatural.</b> · ⚠️ <b>Almost there!</b> · ❌ <b>Not quite.</b></p>
+
+  <div class="grid2">
+    <div class="chat">
+      <p class="cap">Option 3: synonyms</p>
+      <div class="msg me u3"><span class="from">Carla</span><span class="mention">@bot</span> 3</div>
+      <div class="msg bot" style="max-width:100%"><span class="from">bot</span>🔄 <b>Synonyms for stall</b>
+<b>stumble</b> = to almost fail or lose momentum
+<i>Example: "The talks stumbled early on."</i>
+...</div>
+    </div>
+    <div class="chat">
+      <p class="cap">Option 4: save</p>
+      <div class="msg me u2"><span class="from">Bruno</span><span class="mention">@bot</span> 4</div>
+      <div class="msg bot" style="max-width:100%"><span class="from">bot</span>✅ Saved: <b>stall</b>.
+Practice it any time with !practice stall, or see everything with !list.
+You might like these too: <b>stall for time</b>, <b>grind to a halt</b>, <b>drag on</b>.
+Add another one whenever you want: tag me with a word.</div>
+    </div>
+  </div>
+
+  <div class="box tip">
+    <p><b>💡 Tip:</b> the word closes by itself after 3 hours without anyone touching it, and everything done so far stays saved.</p>
+  </div>
+</section>
+
+<!-- ============================== 4 ============================== -->
+<section>
+  <h2><span class="n">4</span>List, practice and removal</h2>
+  <p class="lead">Everything the class adds becomes a numbered list, the same for everyone in the group.</p>
+
+  <h3><code>!list</code>: the class's words</h3>
+  <div class="chat">
+    <div class="msg me u1"><span class="from">Ana</span>!list</div>
+    <div class="msg bot"><span class="from">bot</span>📚 <b>The class's words</b> (23) — newest first
+23. stall: travar, emperrar
+22. no cap: sem mentira, falando sério
+21. grind to a halt: parar aos poucos
+...
+
+💡 !practice 23 to practice one
+Page 1/3 — !list 2 for more</div>
+  </div>
+  <p>Each word has a <b>fixed number</b> (1 is the oldest). Use <code>!list 2</code> for the next page. In classes from B1-B2 up, the list shows the English definition instead of the translation.</p>
+
+  <h3><code>!practice</code>: practice again</h3>
+  <ul>
+    <li><code>!practice stall</code> or <code>!practice 23</code>: reopens that word, with the card and the menu.</li>
+    <li><code>!practice</code> on its own: opens the oldest pending (not yet practiced) word.</li>
+  </ul>
+
+  <h3><code>!delete</code>: remove a word from the list</h3>
+  <ul>
+    <li><code>!delete stall</code> or <code>!delete 23</code>.</li>
+    <li>Only <b>whoever added</b> the word, or a bot admin, can delete it. Everyone else gets a notice.</li>
+  </ul>
+
+  <h3><code>!group</code>: the class summary</h3>
+  <div class="chat">
+    <div class="msg me u3"><span class="from">Carla</span>!group</div>
+    <div class="msg bot"><span class="from">bot</span><b>Your class</b> 🏫
+🎯 Level: A2-B1
+📚 Words: 23 (15 practiced, 8 pending)
+🔁 Due for review: 6
+⏰ Reminders: every weekday around 19:00 (up to 20 min earlier or later)
+⏭️ Next review: today at 19:00
+🏆 Weekly challenge: Fri 30 Oct at 13:00
+👥 <b>Members</b> (12)
+• Prof. Marina (teacher)
+• Ana (student) · 14 review answers
+• Bruno (student) · 9 review answers
+...</div>
+  </div>
+  <p><code>!group</code> shows names only, never phone numbers, and doesn't tag anyone.</p>
+</section>
+
+<!-- ============================== 5 ============================== -->
+<section>
+  <h2><span class="n">5</span>Daily review</h2>
+  <p class="lead">Every weekday, around 19:00, the bot brings words from the class list to review. Nobody gets tagged: it's an invitation for whoever is around.</p>
+
+  <ol class="steps">
+    <li>The bot opens the round with <b>5 words</b> picked by spaced repetition: the ones that are "due" come first.</li>
+    <li>For each word, <b>anyone</b> answers by tagging the bot: explains the word in English in their own words or writes a sentence with it.</li>
+    <li>The AI gives feedback. The <b>first acceptable answer</b> takes the word, and the bot sends the next one.</li>
+    <li>If the answer isn't good yet, the bot gives a hint and the word stays open for someone else to try.</li>
+    <li>At the end, the bot sends the summary: the solid words, the ones coming back soon and the skipped ones.</li>
+  </ol>
+
+  <div class="chat">
+    <p class="cap">Example round</p>
+    <div class="msg bot"><span class="from">bot</span>⏰ <b>Practice time</b> — 5 words to review.</div>
+    <div class="msg bot"><span class="from">bot</span>🔁 1/5 · <b>stall</b>
+Explain it in English in your own words, or write a sentence using it (tag me to answer).
+
+<i>Anyone can answer · tag me with skip for the next word · skipall to stop the review</i></div>
+    <div class="msg me u2"><span class="from">Bruno</span><span class="mention">@bot</span> it's when you stop</div>
+    <div class="msg bot"><span class="from">bot</span>💬 <b>Bruno</b> answered:
+❌ Close, but too vague: stall is about progress stopping.
+💬 Try: "It means to stop making progress."
+
+The word is still open — anyone can try again, or !skip.</div>
+    <div class="msg me u1"><span class="from">Ana</span><span class="mention">@bot</span> My English stalled when I stopped watching series</div>
+    <div class="msg bot"><span class="from">bot</span>👏 <b>Ana</b> answered:
+✅ Great sentence! "Stalled" shows your progress stopped.
+
+🔁 2/5 · <b>no cap</b>
+...</div>
+  </div>
+
+  <div class="chat">
+    <p class="cap">End of the round</p>
+    <div class="msg bot"><span class="from">bot</span>🎉 <b>Practice done</b> — 5 reviewed.
+✅ Solid: stall, no cap, drag on
+🔁 Coming back soon: grind to a halt
+⏭️ Skipped: breakthrough
+Add a new word whenever you want: tag me with a word.</div>
+  </div>
+</section>
+
+<section>
+  <div style="page-break-inside: avoid;">
+  <h3 style="margin-top:0">How the bot decides when each word comes back</h3>
+  <p>Everyone remembers words at their own pace. That's why the bot keeps a <b>class memory</b>: for each student and each word, it knows whether that person got it right or wrong in the daily review, and how long ago. As the days go by, the chance of remembering drops.</p>
+  <ul>
+    <li>A word only starts coming back later once <b>almost the whole class</b> has shown they remember it, not just whoever answered fastest.</li>
+    <li>Wrong answers count too: if several people get it wrong, the word comes back sooner.</li>
+    <li>Only people who take part in the daily review count. Someone who only reads the group doesn't hold the class's words back.</li>
+  </ul>
+  <div style="page-break-inside: avoid; margin: 3mm 0 2mm;">
+<svg viewBox="0 0 700 520" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="DejaVu Sans, sans-serif">
+  <defs>
+    <marker id="seta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5b6470"/></marker>
+  </defs>
+  <g stroke="#5b6470" stroke-width="1.6" fill="none">
+    <line x1="350" y1="54" x2="350" y2="72" marker-end="url(#seta)"/>
+    <line x1="350" y1="116" x2="350" y2="134" marker-end="url(#seta)"/>
+    <polyline points="350,206 350,224 175,224 175,244" marker-end="url(#seta)"/>
+    <polyline points="350,224 525,224 525,244" marker-end="url(#seta)"/>
+    <polyline points="175,290 175,300 40,300 40,438"/>
+    <line x1="40" y1="330" x2="58" y2="330" marker-end="url(#seta)"/>
+    <line x1="40" y1="384" x2="58" y2="384" marker-end="url(#seta)"/>
+    <line x1="40" y1="438" x2="58" y2="438" marker-end="url(#seta)"/>
+    <line x1="525" y1="290" x2="525" y2="308" marker-end="url(#seta)"/>
+    <line x1="525" y1="362" x2="525" y2="380" marker-end="url(#seta)"/>
+    <polyline points="195,462 195,510 10,510 10,32 148,32" stroke-dasharray="5 4" marker-end="url(#seta)"/>
+  </g>
+
+  <rect x="150" y="10" width="400" height="44" rx="8" fill="#ffffff" stroke="#1d232b" stroke-width="1.4"/>
+  <text x="350" y="37" text-anchor="middle" font-size="14" fill="#1d232b">Someone answers a word in the daily review</text>
+
+  <rect x="150" y="72" width="400" height="44" rx="8" fill="#ffffff" stroke="#1d232b" stroke-width="1.4"/>
+  <text x="350" y="99" text-anchor="middle" font-size="14" fill="#1d232b">The bot notes whether that person got it right</text>
+
+  <rect x="90" y="134" width="520" height="72" rx="10" fill="#e7f4ef" stroke="#0f7b5f" stroke-width="2"/>
+  <text x="350" y="158" text-anchor="middle" font-size="15" font-weight="bold" fill="#0f7b5f">Class memory</text>
+  <text x="350" y="178" text-anchor="middle" font-size="12.5" fill="#1d232b">for each student and each word: right? how long ago?</text>
+  <text x="350" y="196" text-anchor="middle" font-size="12.5" fill="#5b6470">someone who never answered the word counts as “maybe knows it”</text>
+
+  <rect x="20" y="244" width="310" height="46" rx="8" fill="#fdf1e6" stroke="#b4560b" stroke-width="1.6"/>
+  <text x="175" y="263" text-anchor="middle" font-size="13" font-weight="bold" fill="#b4560b">Daily review</text>
+  <text x="175" y="281" text-anchor="middle" font-size="12.5" fill="#1d232b">How many students remember the word?</text>
+
+  <rect x="60" y="308" width="270" height="44" rx="8" fill="#ffffff" stroke="#0f7b5f" stroke-width="1.4"/>
+  <text x="72" y="326" font-size="12.5" font-weight="bold" fill="#0f7b5f">Almost everyone → one step up</text>
+  <text x="72" y="343" font-size="10.5" fill="#5b6470">comes back later: 1 → 3 → 7 → 14 → 30 days</text>
+
+  <rect x="60" y="362" width="270" height="44" rx="8" fill="#ffffff" stroke="#5b6470" stroke-width="1.4"/>
+  <text x="72" y="380" font-size="12.5" font-weight="bold" fill="#1d232b">About half → stays</text>
+  <text x="72" y="397" font-size="11.5" fill="#5b6470">comes back after the same interval</text>
+
+  <rect x="60" y="416" width="270" height="44" rx="8" fill="#ffffff" stroke="#b4560b" stroke-width="1.4"/>
+  <text x="72" y="434" font-size="12.5" font-weight="bold" fill="#b4560b">Few → one step down</text>
+  <text x="72" y="451" font-size="11.5" fill="#5b6470">comes back sooner</text>
+
+  <text x="205" y="500" font-size="11" fill="#5b6470" font-style="italic">on the right day, the word returns in a later daily review</text>
+
+  <rect x="370" y="244" width="310" height="46" rx="8" fill="#fdf1e6" stroke="#b4560b" stroke-width="1.6"/>
+  <text x="525" y="263" text-anchor="middle" font-size="13" font-weight="bold" fill="#b4560b">Weekly challenge</text>
+  <text x="525" y="281" text-anchor="middle" font-size="12.5" fill="#1d232b">only reads the memory</text>
+
+  <rect x="370" y="308" width="310" height="54" rx="8" fill="#ffffff" stroke="#1d232b" stroke-width="1.4"/>
+  <text x="525" y="330" text-anchor="middle" font-size="12.5" fill="#1d232b">Picks the words the class</text>
+  <text x="525" y="348" text-anchor="middle" font-size="12.5" fill="#1d232b">forgets the most</text>
+
+  <rect x="370" y="380" width="310" height="54" rx="8" fill="#ffffff" stroke="#1d232b" stroke-width="1.4"/>
+  <text x="525" y="402" text-anchor="middle" font-size="12.5" fill="#1d232b">Tags a student with the question on</text>
+  <text x="525" y="420" text-anchor="middle" font-size="12.5" fill="#1d232b">the words <tspan font-weight="bold">they</tspan> need the most</text>
+
+  <rect x="370" y="448" width="310" height="34" rx="8" fill="none" stroke="#5b6470" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="525" y="470" text-anchor="middle" font-size="11.5" fill="#5b6470">challenge answers don't change the memory</text>
+</svg>
+  </div>
+  <p class="note">This is <b>spaced repetition</b> (the idea behind Anki), adapted for a class: what the class already knows shows up less and less, and what someone still forgets comes back soon.</p>
+  </div>
+
+  <h3>Commands during the review</h3>
+  <table>
+    <tr><th>Command</th><th>What it does</th></tr>
+    <tr><td><code>@bot</code> + answer (or <code>!</code> + answer)</td><td>Answers the current word.</td></tr>
+    <tr><td><code>!skip</code> or <code>@bot skip</code></td><td>Skips the word; it comes back in a later review.</td></tr>
+    <tr><td><code>!skipall</code>, <code>!stop</code> or <code>!0</code></td><td>Ends the round and shows the summary.</td></tr>
+    <tr><td><code>!review</code></td><td>Starts a round right away, without waiting for 19:00.</td></tr>
+    <tr><td><code>!daily</code></td><td>Shows the time and the next review.</td></tr>
+  </table>
+
+  <h3>Automatic rules</h3>
+  <ul>
+    <li>The time can vary by up to <b>20 minutes</b> earlier or later.</li>
+    <li>The round <b>closes by itself</b> after 3 hours without any message in the group.</li>
+    <li>After <b>3 reviews in a row with no answers</b>, the bot pauses the daily review. Any message from the class turns it back on.</li>
+    <li>If the class has no words yet, the bot stays silent.</li>
+  </ul>
+
+  <div class="chat">
+    <p class="cap"><code>!daily</code>: see the settings</p>
+    <div class="msg me u3"><span class="from">Carla</span>!daily</div>
+    <div class="msg bot"><span class="from">bot</span>⏰ <b>Daily review</b>
+🕖 every weekday around 19:00 (may arrive up to 20 min earlier or later)
+📚 5 words per review
+⏭️ Next one: today at 19:00
+<i>Admins can change it: !daily 19h · !daily weekends on · !daily off</i></div>
+  </div>
+
+  <div class="box warn">
+    <p><b>🛠️ Admins only:</b> <code>!daily 20h</code> (time), <code>!daily weekends on</code> (includes Saturday and Sunday), <code>!daily size 3</code> (words per round; <code>size auto</code> goes back to the default), <code>!daily off</code> / <code>!daily on</code>.</p>
+  </div>
+</section>
+
+<!-- ============================== 6 ============================== -->
+<section>
+  <h2><span class="n">6</span>Weekly challenge</h2>
+  <p class="lead">Once a week (default: <b>Friday, around 13:00</b>), the bot creates open questions with the class's vocabulary, at the class's level, and tags one student per question.</p>
+
+  <ol class="steps">
+    <li>The AI picks up to 15 words from the list, favoring the ones the class <b>forgets the most</b> (from the class memory, section 5).</li>
+    <li>It creates <b>one question per student</b> (up to 10). Teachers and admins are never tagged.</li>
+    <li>Each question starts by tagging that turn's student, who gets the question with the words <b>they</b> most need to review. Students take turns from one week to the next.</li>
+    <li><b>Anyone can try</b> and gets feedback, but the question only moves on when <b>the tagged student</b> answers or someone skips.</li>
+    <li>The answer has to make sense for the question. Using the class's words isn't required, but it makes the answer better.</li>
+  </ol>
+
+  <div class="chat">
+    <p class="cap">Example</p>
+    <div class="msg bot"><span class="from">bot</span>🏆 <b>Weekly challenge</b> — 3 questions, one student each.
+I'll tag who answers. Anyone can try, but I only move on when the tagged person answers, or someone skips.</div>
+    <div class="msg bot"><span class="from">bot</span><span class="mention">@Ana</span> What would you do if a project you care about <b>stalled</b> for weeks?
+
+/1 Explain the question
+/2 Listen to the question
+/3 Skip this question
+<i>🏆 Weekly challenge · 1/3 — tag me to answer</i></div>
+    <div class="msg me u1"><span class="from">Ana</span>/1</div>
+    <div class="msg bot"><span class="from">bot</span>🇧🇷 O que você faria se um projeto importante para você ficasse parado por semanas?
+🇺🇸 Imagine a project you love stopped moving forward. What would you do?</div>
+    <div class="msg me u2"><span class="from">Bruno</span><span class="mention">@bot</span> I would talk with the team</div>
+    <div class="msg bot"><span class="from">bot</span>✅ <b>Bruno</b>: Good idea, and clear!
+⏳ Nice try! I'm still waiting for @Ana (or a skip).</div>
+    <div class="msg me u1"><span class="from">Ana</span><span class="mention">@bot</span> I would find out why it stalled and ask for help</div>
+    <div class="msg bot"><span class="from">bot</span>🌟 <b>Ana</b>: Great answer! You used "stalled" naturally.</div>
+    <div class="msg bot"><span class="from">bot</span><span class="mention">@Carla</span> ...</div>
+  </div>
+</section>
+
+<section>
+  <h3 style="margin-top:0">The menu for each question</h3>
+  <table>
+    <tr><th>Option</th><th>What it does</th></tr>
+    <tr><td><code>/1</code> (or <code>@bot 1</code>)</td><td>Explains the question. In A1-A2 and A2-B1 classes, first in 🇧🇷 Portuguese and then in 🇺🇸 English; from B1-B2 on, English only.</td></tr>
+    <tr><td><code>/2</code> (or <code>@bot 2</code>)</td><td>Sends the question as audio, for listening practice.</td></tr>
+    <tr><td><code>/3</code> (or <code>@bot 3</code>, <code>!skip</code>)</td><td>Skips the question and moves on to the next student.</td></tr>
+    <tr><td><code>!skipall</code>, <code>!stop</code>, <code>!0</code></td><td>Ends the challenge with the summary.</td></tr>
+  </table>
+
+  <div class="chat">
+    <p class="cap">End of the challenge</p>
+    <div class="msg bot"><span class="from">bot</span>🏁 <b>Weekly challenge done</b> — 2 of 3 answered.
+⏭️ Skipped: 1
+Add new words any time: tag me with a word.</div>
+  </div>
+
+  <h3>Rules</h3>
+  <ul>
+    <li>The challenge only <b>reads</b> the class memory: its answers don't change when words come back in the daily review. They count toward the participation ranking.</li>
+    <li>It closes by itself after 3 hours without any message in the group.</li>
+    <li>If the daily review and the challenge fall at the same time, the challenge comes first.</li>
+    <li>The time can vary by up to 20 minutes earlier or later.</li>
+    <li><code>!weekly</code> shows the day, the time and the next challenge.</li>
+  </ul>
+
+  <div class="box warn">
+    <p><b>🛠️ Admins only:</b> <code>!weekly mon 9h</code> (day and time), <code>!weekly size 3</code> (number of questions; <code>size auto</code> goes back to one per student), <code>!weekly off</code> / <code>!weekly on</code> and <code>!weekly now</code> (starts the challenge right away).</p>
+  </div>
+</section>
+
+<!-- ============================== 7 ============================== -->
+<section>
+  <h2><span class="n">7</span>Engagement ranking</h2>
+  <p class="lead">The ranking shows who took part the most. Admins get the ranking as a PDF in private chat with <code>/ranking</code>.</p>
+
+  <h3>What earns points</h3>
+  <div class="grid2">
+    <div class="box tip">
+      <p><b>✅ Counts</b></p>
+      <ul>
+        <li>Each answer in the <b>daily review</b>.</li>
+        <li>Each answer in the <b>weekly challenge</b>, even if you're not the tagged student.</li>
+        <li>Every attempt counts, including the ones that got ❌.</li>
+      </ul>
+    </div>
+    <div class="box warn">
+      <p><b>❌ Doesn't count</b></p>
+      <ul>
+        <li>Adding words.</li>
+        <li>Practicing a word outside the review (menu 2-5, free sentences).</li>
+        <li>Teachers, admins and the owner: they stay out of the ranking.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>How the order works</h3>
+  <table>
+    <tr><th>Ranking</th><th>Criteria</th></tr>
+    <tr><td><b>Top 20 students</b> (all classes)</td><td>1st total answers · 2nd distinct days with participation · 3rd accepted answers (no ❌)</td></tr>
+    <tr><td><b>Top 10 classes</b></td><td>Answers <b>per enrolled student</b>, so small classes compete on equal terms. Also shows the total and how many students took part.</td></tr>
+    <tr><td><b>Top 3 in each class</b></td><td>Same criteria as the student top list, within each class.</td></tr>
+  </table>
+
+  <div class="box tip">
+    <p><b>💡 To climb the ranking:</b> taking part a little <b>every day</b> is worth more than a lot on a single day, since days with participation break ties. Answering well helps too.</p>
+  </div>
+
+  <h3>Example calculation</h3>
+  <table>
+    <tr><th>Class</th><th>Students</th><th>Answers</th><th>Per student</th><th>Position</th></tr>
+    <tr><td>Tuesday 7pm Class</td><td>6</td><td>90</td><td><b>15.0</b></td><td>🥇 1st</td></tr>
+    <tr><td>Saturday Class</td><td>12</td><td>132</td><td><b>11.0</b></td><td>🥈 2nd</td></tr>
+  </table>
+  <p>The Saturday class has more answers in total, but the Tuesday class comes first because each student took part more.</p>
+
+  <h3>How an admin asks for the ranking</h3>
+  <div class="chat">
+    <div class="msg me"><span class="from">Admin (in the bot's private chat)</span>/ranking 2</div>
+    <div class="msg bot voice">📄 <b>ranking.pdf</b> · 📊 Engagement ranking · last 2 months</div>
+  </div>
+  <ul>
+    <li><code>/ranking</code>: last 6 months (default). <code>/ranking 2</code>: last 2 months (from 1 to 24).</li>
+    <li>The PDF includes each student's saved name and number, the total, the active days and the class. That's why it stays with the admins only.</li>
+    <li>The class name in the ranking is the WhatsApp group name.</li>
+  </ul>
+</section>
+
+<!-- ============================== 8 ============================== -->
+<section>
+  <h2><span class="n">8</span>Class level and audio</h2>
+
+  <h3>Class level: <code>!level</code></h3>
+  <p>Each group has a level, which calibrates the definitions, examples, corrections and challenge questions. The word itself can be at any level.</p>
+  <table>
+    <tr><th>Level</th><th>Does Portuguese appear?</th></tr>
+    <tr><td>A1-A2 · A2-B1</td><td>Yes: the 🇧🇷 line on the card and in the list, and the challenge explanation in Portuguese before the English.</td></tr>
+    <tr><td>B1-B2 · B2-C1 · C1-C2 · C2</td><td>No: everything in English.</td></tr>
+  </table>
+  <ul>
+    <li><code>!level</code>: anyone can see the class level.</li>
+    <li><code>!level B1-B2</code>: only the teacher can change it.</li>
+  </ul>
+
+  <h3>Audio pronunciation</h3>
+  <ul>
+    <li>Each new word comes with <b>two voice notes</b>: the word and the example sentence.</li>
+    <li>In the weekly challenge, <code>/2</code> reads the question out loud.</li>
+  </ul>
+
+  <h3>Answering by voice</h3>
+  <p>Prefer to speak? Record a voice note <b>replying to (quoting) a bot message</b>. It transcribes what you said and treats it like a written message. Great for speaking practice.</p>
+  <div class="chat">
+    <div class="msg me u1"><span class="from">Ana</span><i style="color:#5b6470">↩ replying to "🔁 1/5 · stall"</i>
+🎤 0:06</div>
+    <div class="msg bot"><span class="from">bot</span>🎙️ <i>my english stalled when I stopped watching series</i></div>
+    <div class="msg bot"><span class="from">bot</span>👏 <b>Ana</b> answered:
+✅ Great sentence! ...</div>
+  </div>
+  <div class="box warn">
+    <p>Voice notes up to <b>60 seconds</b>. A voice note that doesn't reply to a bot message is ignored, like any group conversation. The bot transcribes exactly what it heard, without correcting it.</p>
+  </div>
+</section>
+
+<!-- ============================== 9 ============================== -->
+<section>
+  <h2><span class="n">9</span>All group commands</h2>
+  <p class="lead">Every command works with <code>!</code> or with <code>/</code>. A command that doesn't exist gets the group help.</p>
+
+  <table>
+    <tr><th style="width:34%">Command</th><th>What it does</th><th style="width:13%">Who</th></tr>
+    <tr><td><code>@bot word</code><br><code>!add word</code></td><td>Adds a word (with context: <code>stall | the talks stalled</code>; with a meaning: <code>stall | to delay on purpose</code>).</td><td><span class="pill all">everyone</span></td></tr>
+    <tr><td><code>@bot 2</code> · <code>3</code> · <code>4</code> · <code>5</code></td><td>With an open word: examples, synonyms, save, discard.</td><td><span class="pill all">everyone</span></td></tr>
+    <tr><td><code>@bot</code> + sentence</td><td>Corrects a sentence with the open word, or answers the review or the challenge.</td><td><span class="pill all">everyone</span></td></tr>
+    <tr><td><code>!list [page]</code></td><td>The class's words, numbered.</td><td><span class="pill all">everyone</span></td></tr>
+    <tr><td><code>!practice [word|number]</code></td><td>Reopens a word (no argument: the oldest pending one).</td><td><span class="pill all">everyone</span></td></tr>
+    <tr><td><code>!delete word|number</code></td><td>Removes a word from the list.</td><td><span class="pill all">who added it</span> <span class="pill adm">admins</span></td></tr>
+    <tr><td><code>!review</code></td><td>Starts a review right away.</td><td><span class="pill all">everyone</span></td></tr>
+    <tr><td><code>!skip</code> · <code>!skipall</code> · <code>!0</code></td><td>Skips the word or question · ends the activity · leaves the open word.</td><td><span class="pill all">everyone</span></td></tr>
+    <tr><td><code>!daily</code></td><td>Shows the daily review settings.</td><td><span class="pill all">everyone</span></td></tr>
+    <tr><td><code>!daily 19h</code> · <code>on</code> · <code>off</code><br><code>!daily weekends on|off</code><br><code>!daily size N|auto</code></td><td>Changes the time, turns it on/off, includes the weekend, changes the round size.</td><td><span class="pill adm">admins</span></td></tr>
+    <tr><td><code>!weekly</code></td><td>Shows the weekly challenge settings.</td><td><span class="pill all">everyone</span></td></tr>
+    <tr><td><code>!weekly fri 13h</code> · <code>on</code> · <code>off</code><br><code>!weekly size N|auto</code> · <code>!weekly now</code></td><td>Changes the day and time, turns it on/off, changes the number of questions, starts right away.</td><td><span class="pill adm">admins</span></td></tr>
+    <tr><td><code>/1</code> · <code>/2</code> · <code>/3</code></td><td>In the challenge: explain, listen, skip the question.</td><td><span class="pill all">everyone</span></td></tr>
+    <tr><td><code>!level</code></td><td>Shows the class level.</td><td><span class="pill all">everyone</span></td></tr>
+    <tr><td><code>!level B1-B2</code></td><td>Changes the class level.</td><td><span class="pill adm">teacher</span></td></tr>
+    <tr><td><code>!group</code></td><td>Class summary: level, words, reviews and members.</td><td><span class="pill all">everyone</span></td></tr>
+    <tr><td><code>!help</code> or <code>@bot</code> on its own</td><td>The group help.</td><td><span class="pill all">everyone</span></td></tr>
+    <tr><td><code>!activate</code></td><td>Turns the bot on in the group. The class name is the WhatsApp group name.</td><td><span class="pill adm">admins</span></td></tr>
+    <tr><td><code>!deactivate</code></td><td>Turns the bot off in the group (the words stay saved).</td><td><span class="pill adm">admins</span></td></tr>
+    <tr><td><code>!teacher @person</code><br><code>!student @person</code></td><td>Makes the person a teacher in every group (repeating undoes it) · makes them a student again.</td><td><span class="pill adm">admins</span></td></tr>
+  </table>
+  <p style="font-size:9pt;color:var(--mute)">"Admins" are the bot's administrators (not the WhatsApp group admins) and the bot's owner.</p>
+</section>
+
+<!-- ============================== 10 ============================== -->
+<section>
+  <h2><span class="n">10</span>Private chat commands (admins only)</h2>
+  <p class="lead">The bot's private chat is the administrators' control panel. Students who message it there get no reply.</p>
+
+  <table>
+    <tr><th style="width:36%">Command</th><th>What it does</th><th style="width:12%">Who</th></tr>
+    <tr><td><code>/groups</code></td><td>Lists the active groups split by level (🟢 A1-A2 and A2-B1 · 🔵 B1-B2 and B2-C1 · 🟣 C1-C2 and C2), with the number of students in each class, and the groups still waiting for an <code>!activate</code> (with the hours until the bot leaves).</td><td><span class="pill adm">admins</span></td></tr>
+    <tr><td><code>/groups off 2</code></td><td>Turns off group no. 2 on the list (the numbering follows the order by level).</td><td><span class="pill adm">admins</span></td></tr>
+    <tr><td><code>/teachers</code></td><td>Lists the teachers.</td><td><span class="pill adm">admins</span></td></tr>
+    <tr><td><code>/teachers 5531999998888</code><br><code>/teachers add|remove NUMBER</code></td><td>Adds a teacher in every group (repeating the number removes them).</td><td><span class="pill adm">admins</span></td></tr>
+    <tr><td><code>/ranking [months]</code></td><td>The engagement ranking PDF (default: 6 months; from 1 to 24).</td><td><span class="pill adm">admins</span></td></tr>
+  </table>
+  <p>Numbers go as digits only, with country and area code: <code>5531999998888</code>. Any other message from an admin in private chat gets the command list.</p>
+
+  <div class="chat">
+    <p class="cap">Example</p>
+    <div class="msg me"><span class="from">Admin</span>/groups</div>
+    <div class="msg bot"><span class="from">bot</span>🏫 <b>Active groups</b> (3/10)
+
+🟢 <b>A2-B1</b>
+1. Tuesday 7pm Class — 6 students
+2. Saturday Class — 12 students
+
+🔵 <b>B1-B2</b>
+3. Conversation Club — 8 students
+
+⏳ <b>Waiting for a !activate</b> (I leave when the time runs out)
+• New Class — 20h left
+
+<i>Turn one off with /groups off 1.</i></div>
+  </div>
+
+  <h3>How to add the bot to a new class</h3>
+  <ol class="steps">
+    <li>A WhatsApp group admin adds the bot's number to the group.</li>
+    <li>A <b>bot admin</b> sends in the group: <code>!activate</code>. The bot uses the WhatsApp group name as the class name.</li>
+    <li>The bot confirms and the class can start using it: <code>!help</code> shows the commands.</li>
+    <li>Set the level: <code>!level A2-B1</code>. Mark the teachers with <code>!teacher @person</code> (or <code>/teachers NUMBER</code> in private chat).</li>
+  </ol>
+  <div class="box warn">
+    <p>If nobody sends <code>!activate</code> within <b>24 hours</b>, the bot leaves the group on its own, without sending a message.</p>
+  </div>
+</section>
+
+<!-- ============================== 11 ============================== -->
+<section>
+  <h2><span class="n">11</span>Limits and FAQ</h2>
+
+  <h3>Usage limits</h3>
+  <p>To keep the bot fast and free during the trial, it has a few limits. When a limit is reached, the bot warns once and stops replying until the limit resets.</p>
+  <table>
+    <tr><th>Limit</th><th>Value</th><th>Bot's notice</th></tr>
+    <tr><td>Messages per person per minute</td><td>6</td><td>⏳ Easy there! I can't keep up that fast...</td></tr>
+    <tr><td>Messages per person per day</td><td>150</td><td>⏳ You've reached today's limit...</td></tr>
+    <tr><td>Messages per group per day</td><td>400</td><td>⏳ This group has reached today's limit...</td></tr>
+    <tr><td>Message length</td><td>500 characters</td><td>The bot asks for a shorter message</td></tr>
+    <tr><td>Audio per person per day</td><td>10 minutes (60 s per voice note)</td><td>🎙️ You've used up today's voice-message time...</td></tr>
+  </table>
+  <p>The class's normal conversation doesn't count toward these limits: only what's meant for the bot.</p>
+
+  <h3>Frequently asked questions</h3>
+  <table>
+    <tr><th style="width:38%">Situation</th><th>What to do</th></tr>
+    <tr><td>I sent a message and the bot didn't reply.</td><td>Did you tag the bot (<code>@</code>) or start with <code>!</code>/<code>/</code>? Without that, it treats it as class conversation.</td></tr>
+    <tr><td>I messaged the bot in private chat.</td><td>The bot doesn't reply to students in private chat. Use the class group.</td></tr>
+    <tr><td>"There's an activity going on right now."</td><td>A review or challenge is in progress. Finish it, or send <code>!0</code> to end it.</td></tr>
+    <tr><td>I want to learn another meaning of the word.</td><td><code>@bot stall | to delay on purpose</code>.</td></tr>
+    <tr><td>I added the wrong word.</td><td><code>@bot 5</code> right after the card, or <code>!delete word</code> later.</td></tr>
+    <tr><td>The challenge tagged someone who isn't online.</td><td>Others can try answering; to move on, someone sends <code>/3</code> and the question goes to the next student.</td></tr>
+    <tr><td>The daily review stopped showing up.</td><td>It pauses after 3 rounds with no answers. Any message from the class turns it back on, and <code>!review</code> starts one right away.</td></tr>
+    <tr><td>The bot said it's "taking a break".</td><td>The day's (or the group's) AI budget ran out. It comes back the next day.</td></tr>
+  </table>
+
+  <div class="box tip">
+    <p><b>🚀 To make the most of the 2 months:</b></p>
+    <ul>
+      <li>Every new word from class becomes an <code>@bot word</code> in the group.</li>
+      <li>Answer the 19:00 review, even if it's just one word a day.</li>
+      <li>On Friday, keep an eye on the challenge: when the bot tags you, the class waits for your answer.</li>
+      <li>Write sentences about your own life: the bot corrects them and you learn to really use the word.</li>
+    </ul>
+  </div>
+</section>
+
+</body>
+</html>
