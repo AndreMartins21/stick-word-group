@@ -738,6 +738,16 @@ async def test_level_por_professor_da_turma_muda_o_nivel() -> None:
     assert m.banco.do_espaco(GRUPO).obter_perfil().nivel == "A2-B1"  # type: ignore[union-attr]
 
 
+async def test_level_por_admin_do_bot_muda_o_nivel_sem_ser_professor() -> None:
+    """ADR-0065: admin do bot faz tudo o que um professor faz."""
+    m = montar(tutor=_tutor(), admins=(BIA.numero,))
+
+    (resposta,) = await m.diz_no_grupo(BIA, "!level A2-B1")
+
+    assert resposta == messages.nivel_alterado("A2-B1")
+    assert m.banco.do_espaco(GRUPO).obter_perfil().nivel == "A2-B1"  # type: ignore[union-attr]
+
+
 async def test_aluno_nao_muda_o_nivel_e_o_nivel_fica_como_estava() -> None:
     m = _grupo()
     await m.diz_no_grupo(ANA, "!help")

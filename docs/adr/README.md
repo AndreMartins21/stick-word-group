@@ -40,7 +40,7 @@ operacional: numeração, status e o índice.
 | [0028](0028-logs-estruturados-com-eventos-e-handler-para-o-cloud-logging.md) | Logs estruturados com eventos e um handler para o Cloud Logging (não o driver `gcplogs`) | Aceito | 2026-09-27 |
 | [0029](0029-snapshot-diario-do-firestore-em-ndjson-no-gcs-lido-pelo-bigquery.md) | Snapshot diário do Firestore em NDJSON no GCS, lido pelo BigQuery como tabela externa | Aceito | 2026-09-28 |
 | [0030](0030-pedido-de-sentido-e-palavra-de-qualquer-nivel.md) | Pedido de sentido (`palavra \| sentido`) e palavra de qualquer nível | Aceito | 2026-09-28 |
-| [0031](0031-level-no-grupo-so-professor-ou-dono-e-opcao-5-dont-save.md) | `!level` no grupo (só professor ou dono muda) e opção 5 do menu renomeada para "Don't save" | Aceito | 2026-09-29 |
+| [0031](0031-level-no-grupo-so-professor-ou-dono-e-opcao-5-dont-save.md) | `!level` no grupo (só professor ou dono muda) e opção 5 do menu renomeada para "Don't save" | Substituído por ADR-0065 | 2026-09-29 |
 | [0032](0032-seis-niveis-e-turma-so-em-ingles-a-partir-do-b1-b2.md) | Seis níveis e turma só em inglês a partir de B1-B2 | Aceito | 2026-10-01 |
 | [0033](0033-revisao-diaria-no-grupo-sem-marcacao.md) | Revisão diária no grupo, sem marcar ninguém | Aceito | 2026-10-01 |
 | [0034](0034-desafio-semanal-com-perguntas-da-ia-e-marcacao.md) | Desafio semanal do grupo, com perguntas da IA e marcação em rodízio | Aceito | 2026-10-01 |
@@ -74,6 +74,7 @@ operacional: numeração, status e o índice.
 | [0062](0062-separacao-em-stick-word-e-stick-word-group.md) | Separar o projeto em stick-word (individual) e stick-word-group (turmas) | Aceito | 2026-10-26 |
 | [0063](0063-infra-em-terraform-e-projeto-gcp-proprio.md) | Infra em Terraform, num projeto GCP próprio (stick-word-group), sem o nome vocabot | Aceito | 2026-10-27 |
 | [0064](0064-memoria-por-aluno-e-cartao-do-grupo-pela-cobertura.md) | Memória por aluno no grupo e cartão da turma pela cobertura, no lugar do SM-2 | Aceito | 2026-10-28 |
+| [0065](0065-admin-faz-tudo-que-o-professor-faz.md) | Admin do bot faz tudo o que um professor faz | Aceito | 2026-11-04 |
 
 ## Quando escrever um
 

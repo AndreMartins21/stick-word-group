@@ -1,6 +1,6 @@
 # ADR-0031: `!level` no grupo (só professor ou dono muda) e opção 5 do menu renomeada para "Don't save"
 
-- **Status:** Aceito
+- **Status:** Substituído por ADR-0065
 - **Data:** 2026-09-29
 
 ## Contexto
