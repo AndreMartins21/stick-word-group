@@ -152,7 +152,7 @@ async def tratar(
         return await conversar(d, sessao, perfil, texto)
 
     if comando == "level":
-        await _nivel(d, perfil, autor, argumento, eh_dono)
+        await _nivel(d, perfil, autor, argumento, eh_admin or eh_dono, eh_dono)
         return sessao
 
     if comando == "daily":
@@ -288,19 +288,30 @@ def _eh_professor(d: Deps, numero: str, membro: Membro | None) -> bool:
 
 
 def _pode_gerir(
-    d: Deps, autor: Autor, membro: Membro | None, eh_dono: Callable[[str], bool]
+    d: Deps,
+    autor: Autor,
+    membro: Membro | None,
+    eh_admin: Callable[[str], bool],
+    eh_dono: Callable[[str], bool],
 ) -> bool:
-    """Professor (da turma ou global) ou dono: quem muda o nível."""
-    return eh_dono(autor.numero) or _eh_professor(d, autor.numero, membro)
+    """Quem pode o que um professor pode: professor (da turma ou global), admin do bot ou dono
+    (ADR-0065: admin faz tudo o que um professor faz)."""
+    return eh_dono(autor.numero) or eh_admin(autor.numero) or _eh_professor(d, autor.numero, membro)
 
 
 async def _nivel(
-    d: Deps, perfil: Profile, autor: Autor, argumento: str, eh_dono: Callable[[str], bool]
+    d: Deps,
+    perfil: Profile,
+    autor: Autor,
+    argumento: str,
+    eh_admin: Callable[[str], bool],
+    eh_dono: Callable[[str], bool],
 ) -> None:
-    """`!level`: qualquer membro vê o nível da turma; só professor ou dono o muda (M33)."""
+    """`!level`: qualquer membro vê o nível da turma; professor, admin do bot ou dono o muda
+    (M33, ADR-0065)."""
     if argumento:
         quem = await bloq(d.repo.obter_membro, autor.numero)
-        if not await bloq(_pode_gerir, d, autor, quem, eh_dono):
+        if not await bloq(_pode_gerir, d, autor, quem, eh_admin, eh_dono):
             await d.conversa.enviar(messages.nivel_so_professor(d.p))
             return
     await commands.definir_nivel(d, perfil, argumento)

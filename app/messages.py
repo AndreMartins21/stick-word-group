@@ -415,7 +415,7 @@ def nivel_atual(nivel: NivelUsuario, p: str = "/") -> str:
 
 
 def nivel_so_professor(p: str = "!") -> str:
-    return f"Only a teacher can change the class's level. To see it, send {p}level."
+    return f"Only a teacher or an admin can change the class's level. To see it, send {p}level."
 
 
 def nivel_alterado(nivel: NivelUsuario) -> str:
