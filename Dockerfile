@@ -1,6 +1,6 @@
 # Imagem do serviço "bot" (seção 10.7 da spec). Build local, sem porta publicada —
 # o WAHA fala com ele pela rede interna do compose.
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 # Binário oficial do uv, pinado na mesma versão usada em dev/CI (ver Makefile e ci.yml).
 COPY --from=ghcr.io/astral-sh/uv:0.10.4 /uv /usr/local/bin/uv
